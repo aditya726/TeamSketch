@@ -14,6 +14,15 @@ const options = {
         description: 'Development server',
       },
     ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+        },
+      },
+    },
   },
   apis: ['./src/routes/*.js', './src/controllers/*.js'], // Path to API docs
 };

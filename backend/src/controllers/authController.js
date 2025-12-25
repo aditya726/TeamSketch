@@ -297,8 +297,62 @@ const getMe = async (req, res) => {
   }
 };
 
+/**
+ * @swagger
+ * /api/auth/google:
+ *   get:
+ *     summary: Initiate Google OAuth login
+ *     tags: [Auth]
+ *     responses:
+ *       302:
+ *         description: Redirect to Google OAuth consent screen
+ */
+const googleAuth = (req, res, next) => {
+  // This is handled by passport middleware in routes
+};
+
+/**
+ * @swagger
+ * /api/auth/google/callback:
+ *   get:
+ *     summary: Google OAuth callback
+ *     tags: [Auth]
+ *     responses:
+ *       200:
+ *         description: Successfully authenticated with Google
+ *       401:
+ *         description: Authentication failed
+ */
+const googleAuthCallback = async (req, res) => {
+  try {
+    // User is authenticated via passport, generate JWT
+    const token = generateToken(req.user._id, req.user.email, req.user.username);
+
+    // Send response with token
+    res.status(200).json({
+      success: true,
+      data: {
+        id: req.user._id,
+        username: req.user.username,
+        email: req.user.email,
+        profile: req.user.profile,
+        role: req.user.role,
+        token
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Authentication failed',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   register,
   login,
-  getMe
+  getMe,
+  googleAuth,
+  googleAuthCallback
 };

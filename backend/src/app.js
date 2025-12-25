@@ -2,8 +2,12 @@ require('dotenv').config();
 const express = require('express');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./config/swagger');
+const connectDB = require('./config/database');
 
 const app = express();
+
+// Connect to MongoDB
+connectDB();
 
 // Middleware
 app.use(express.json());
@@ -35,8 +39,16 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
  *                   example: Server is running
  */
 
-// Routes will be added here
-// app.use('/api/users', require('./routes/userRoutes'));
+// Routes
+app.use('/api/auth', require('./routes/authRoutes'));
+
+// Health check route
+app.get('/api/health', (req, res) => {
+  res.status(200).json({
+    status: 'OK',
+    message: 'Server is running'
+  });
+});
 
 const PORT = process.env.PORT || 5000;
 

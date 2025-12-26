@@ -20,7 +20,7 @@ const LandingPage = () => {
           The secure, real-time whiteboard for high-performance teams. 
         </p>
         <div className="flex gap-4">
-          <Link to="/register" className="px-8 py-4 bg-indigo-600 text-white rounded-xl font-bold text-lg hover:bg-indigo-700 transition shadow-lg">
+          <Link to="/whiteboard" className="px-8 py-4 bg-indigo-600 text-white rounded-xl font-bold text-lg hover:bg-indigo-700 transition shadow-lg">
             Start Sketching Now
           </Link>
         </div>

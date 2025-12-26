@@ -6,6 +6,7 @@ import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import AuthSuccess from './pages/AuthSuccess';
+import Whiteboard from './components/Whiteboard';
 
 // --- Protected Route Component ---
 // This checks if the user is logged in. If not, it kicks them back to Login.
@@ -25,6 +26,9 @@ function App() {
         
         {/* Google Auth Callback Route */}
         <Route path="/auth-success" element={<AuthSuccess />} />
+
+        {/* Whiteboard Route - Public access */}
+        <Route path="/whiteboard" element={<Whiteboard />} />
 
         {/* Protected Dashboard Route */}
         <Route 

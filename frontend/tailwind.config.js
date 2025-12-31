@@ -13,7 +13,12 @@ export default {
     "./src/**/*.{js,ts,jsx,tsx}"
   ],
   theme: {
-    extend: {},
+    extend: {
+      fontFamily: {
+        'gloria': ['"Gloria Hallelujah"', 'cursive'],
+        'architects': ['"Architects Daughter"', 'cursive'],
+      },
+    },
   },
   plugins: [],
 }

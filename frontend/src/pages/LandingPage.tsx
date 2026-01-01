@@ -1,9 +1,18 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from "framer-motion";
 import { FloatingDoodles } from "../components/FloatingDoodles";
-import { PencilLine, Sparkles, Zap, Users } from "lucide-react";
+import { PencilLine, Sparkles, Zap, Users, User, LogOut } from "lucide-react";
+import { useAuthStore } from '../store/useAuthStore';
 
 const LandingPage = () => {
+  const { isAuthenticated, user, logout } = useAuthStore();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+  };
+
   return (
     <div className="min-h-screen bg-white text-zinc-900 font-architects relative overflow-hidden">
       <FloatingDoodles />
@@ -27,15 +36,36 @@ const LandingPage = () => {
           animate={{ x: 0, opacity: 1 }}
           className="space-x-6 flex items-center"
         >
-          <Link to="/login" className="hover:text-indigo-600 transition-colors font-medium">
-            Log In
-          </Link>
-          <Link 
-            to="/register" 
-            className="bg-indigo-600 text-white px-6 py-2 rounded-full font-bold hover:bg-indigo-700 transition-all shadow-md hover:shadow-lg active:scale-95"
-          >
-            Sign Up
-          </Link>
+          {isAuthenticated ? (
+            <>
+              <Link 
+                to="/profile" 
+                className="flex items-center gap-2 hover:text-indigo-600 transition-colors font-medium"
+              >
+                <User size={20} />
+                <span>{user?.username}</span>
+              </Link>
+              <button 
+                onClick={handleLogout}
+                className="bg-zinc-900 text-white px-6 py-2 rounded-full font-bold hover:bg-zinc-800 transition-all shadow-md hover:shadow-lg active:scale-95 flex items-center gap-2"
+              >
+                <LogOut size={18} />
+                Logout
+              </button>
+            </>
+          ) : (
+            <>
+              <Link to="/login" className="hover:text-indigo-600 transition-colors font-medium">
+                Log In
+              </Link>
+              <Link 
+                to="/register" 
+                className="bg-indigo-600 text-white px-6 py-2 rounded-full font-bold hover:bg-indigo-700 transition-all shadow-md hover:shadow-lg active:scale-95"
+              >
+                Sign Up
+              </Link>
+            </>
+          )}
         </motion.div>
       </nav>
 

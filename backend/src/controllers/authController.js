@@ -328,24 +328,13 @@ const googleAuthCallback = async (req, res) => {
     // User is authenticated via passport, generate JWT
     const token = generateToken(req.user._id, req.user.email, req.user.username);
 
-    // Send response with token
-    res.status(200).json({
-      success: true,
-      data: {
-        id: req.user._id,
-        username: req.user.username,
-        email: req.user.email,
-        profile: req.user.profile,
-        role: req.user.role,
-        token
-      }
-    });
+    // Redirect to frontend with token as query parameter
+    const frontendURL = process.env.FRONTEND_URL;
+    res.redirect(`${frontendURL}/auth-success?token=${token}`);
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Authentication failed',
-      error: error.message
-    });
+    // Redirect to frontend login page on error
+    const frontendURL = process.env.FRONTEND_URL;
+    res.redirect(`${frontendURL}/login?error=Authentication failed`);
   }
 };
 

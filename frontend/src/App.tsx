@@ -6,6 +6,7 @@ import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import AuthSuccess from './pages/AuthSuccess';
+import UserProfile from './pages/UserProfile';
 import Whiteboard from './components/Whiteboard';
 
 // --- Protected Route Component ---
@@ -30,28 +31,12 @@ function App() {
         {/* Whiteboard Route - Public access */}
         <Route path="/whiteboard" element={<Whiteboard />} />
 
-        {/* Protected Dashboard Route */}
+        {/* Protected Profile Route */}
         <Route 
-          path="/dashboard" 
+          path="/profile" 
           element={
             <PrivateRoute>
-              {/* This is a Placeholder for your future Whiteboard Canvas */}
-              <div className="min-h-screen bg-gray-100 p-8">
-                <div className="max-w-7xl mx-auto">
-                  <h1 className="text-3xl font-bold text-gray-900 mb-4">Dashboard</h1>
-                  <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                    <p className="text-gray-600">
-                      You are securely logged in! This is where the TeamSketch Whiteboard will go.
-                    </p>
-                    <button 
-                      onClick={() => useAuthStore.getState().logout()}
-                      className="mt-4 px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition"
-                    >
-                      Logout Test
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <UserProfile />
             </PrivateRoute>
           } 
         />

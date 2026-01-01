@@ -6,6 +6,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { fabric } from 'fabric';
 import { io, Socket } from 'socket.io-client';
+import { useNavigate } from 'react-router-dom';
+import { useAuthStore } from '../store/useAuthStore';
+import { createRoom } from '../services/roomApi';
 import {
   WhiteboardMode,
   WhiteboardTool,
@@ -16,7 +19,7 @@ import {
   ServerEvents,
 } from '../types/whiteboard.types';
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:4000';
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL;
 
 const Whiteboard: React.FC = () => {
   // Refs
@@ -24,6 +27,10 @@ const Whiteboard: React.FC = () => {
   const fabricCanvasRef = useRef<fabric.Canvas | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const isDrawingRef = useRef<boolean>(false);
+
+  // Hooks
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuthStore();
 
   // State
   const [mode, setMode] = useState<WhiteboardMode>('solo');
@@ -35,6 +42,8 @@ const Whiteboard: React.FC = () => {
   const [brushSize, setBrushSize] = useState<number>(2);
   const [commandStack, setCommandStack] = useState<Command[]>([]);
   const [commandIndex, setCommandIndex] = useState<number>(-1);
+  const [isCreatingRoom, setIsCreatingRoom] = useState<boolean>(false);
+  const [copySuccess, setCopySuccess] = useState<boolean>(false);
 
   /**
    * Initialize Fabric.js canvas
@@ -291,6 +300,65 @@ const Whiteboard: React.FC = () => {
   }, [mode]);
 
   /**
+   * Create a new room (requires authentication)
+   */
+  const handleCreateRoom = async () => {
+    // Check if user is authenticated
+    if (!isAuthenticated) {
+      alert('Please login to create a room');
+      navigate('/login');
+      return;
+    }
+
+    setIsCreatingRoom(true);
+
+    try {
+      // Call API to generate room ID
+      const response = await createRoom();
+      
+      if (response.success) {
+        const generatedRoomId = response.roomId;
+        setRoomId(generatedRoomId);
+        
+        // Automatically join the created room
+        if (socketRef.current && socketRef.current.connected) {
+          socketRef.current.emit(ClientEvents.JOIN_ROOM, { roomId: generatedRoomId });
+          setCurrentRoomId(generatedRoomId);
+          console.log(`[App] Created and joined room: ${generatedRoomId}`);
+        }
+      } else {
+        alert('Failed to create room');
+      }
+    } catch (error: any) {
+      console.error('Error creating room:', error);
+      if (error.response?.status === 401) {
+        alert('Please login to create a room');
+        navigate('/login');
+      } else {
+        alert('Failed to create room. Please try again.');
+      }
+    } finally {
+      setIsCreatingRoom(false);
+    }
+  };
+
+  /**
+   * Copy room ID to clipboard
+   */
+  const handleCopyRoomId = async () => {
+    if (!currentRoomId) return;
+
+    try {
+      await navigator.clipboard.writeText(currentRoomId);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (error) {
+      console.error('Failed to copy room ID:', error);
+      alert('Failed to copy room ID');
+    }
+  };
+
+  /**
    * Join a room
    */
   const handleJoinRoom = () => {
@@ -498,38 +566,98 @@ const Whiteboard: React.FC = () => {
               <div style={{ fontSize: '12px', color: isConnected ? 'green' : 'red' }}>
                 {isConnected ? '🟢 Connected' : '🔴 Disconnected'}
               </div>
-              <input
-                type="text"
-                placeholder="Room ID"
-                value={roomId}
-                onChange={(e) => setRoomId(e.target.value)}
-                disabled={!!currentRoomId}
-                style={{
-                  padding: '10px',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                }}
-              />
+              
               {!currentRoomId ? (
-                <button
-                  onClick={handleJoinRoom}
-                  disabled={!isConnected}
-                  style={{
-                    padding: '10px',
-                    backgroundColor: '#2196F3',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: isConnected ? 'pointer' : 'not-allowed',
-                  }}
-                >
-                  Join Room
-                </button>
+                <>
+                  <button
+                    onClick={handleCreateRoom}
+                    disabled={!isConnected || isCreatingRoom}
+                    style={{
+                      padding: '10px',
+                      backgroundColor: '#4CAF50',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: isConnected && !isCreatingRoom ? 'pointer' : 'not-allowed',
+                      fontWeight: 'bold',
+                    }}
+                  >
+                    {isCreatingRoom ? '⏳ Creating...' : '➕ Create New Room'}
+                  </button>
+                  
+                  <div style={{ 
+                    textAlign: 'center', 
+                    margin: '10px 0',
+                    color: '#666',
+                    fontSize: '12px'
+                  }}>
+                    OR
+                  </div>
+                  
+                  <input
+                    type="text"
+                    placeholder="Enter Room ID to Join"
+                    value={roomId}
+                    onChange={(e) => setRoomId(e.target.value.toUpperCase())}
+                    style={{
+                      padding: '10px',
+                      border: '1px solid #ddd',
+                      borderRadius: '4px',
+                      textTransform: 'uppercase',
+                    }}
+                  />
+                  <button
+                    onClick={handleJoinRoom}
+                    disabled={!isConnected || !roomId.trim()}
+                    style={{
+                      padding: '10px',
+                      backgroundColor: '#2196F3',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: isConnected && roomId.trim() ? 'pointer' : 'not-allowed',
+                    }}
+                  >
+                    🚪 Join Room
+                  </button>
+                </>
               ) : (
                 <>
-                  <div style={{ fontSize: '12px', color: 'green' }}>
-                    📍 In room: {currentRoomId}
+                  <div style={{ 
+                    padding: '10px',
+                    backgroundColor: '#e8f5e9',
+                    borderRadius: '4px',
+                    border: '1px solid #4CAF50'
+                  }}>
+                    <div style={{ fontSize: '10px', color: '#666', marginBottom: '5px' }}>
+                      Room ID:
+                    </div>
+                    <div style={{ 
+                      fontSize: '16px', 
+                      fontWeight: 'bold',
+                      color: '#2e7d32',
+                      fontFamily: 'monospace',
+                      letterSpacing: '2px'
+                    }}>
+                      {currentRoomId}
+                    </div>
                   </div>
+                  
+                  <button
+                    onClick={handleCopyRoomId}
+                    style={{
+                      padding: '10px',
+                      backgroundColor: copySuccess ? '#4CAF50' : '#FF9800',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      transition: 'background-color 0.3s',
+                    }}
+                  >
+                    {copySuccess ? '✓ Copied!' : '📋 Copy Room ID'}
+                  </button>
+                  
                   <button
                     onClick={handleLeaveRoom}
                     style={{
@@ -541,7 +669,7 @@ const Whiteboard: React.FC = () => {
                       cursor: 'pointer',
                     }}
                   >
-                    Leave Room
+                    🚪 Leave Room
                   </button>
                 </>
               )}

@@ -19,7 +19,7 @@ const LoginPage = () => {
     try {
       const { data } = await api.post('/auth/login', { email, password });
       login(data.data); 
-      navigate('/dashboard');
+      navigate('/');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Login failed');
     } finally {
@@ -28,9 +28,6 @@ const LoginPage = () => {
   };
 
   const handleGoogleLogin = () => {
-    // Note: Since we didn't change the backend, this might show 
-    // raw text on screen instead of redirecting back. 
-    // This is expected until your teammate updates the backend.
     window.location.href = 'http://localhost:5000/api/auth/google';
   };
 

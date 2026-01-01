@@ -70,6 +70,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Routes
 app.use('/api/auth', require('./routes/authRoutes'));
+app.use('/api/rooms', require('./routes/roomRoutes'));
 
 // Health check route
 app.get('/api/health', (req, res) => {

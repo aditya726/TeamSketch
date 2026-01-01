@@ -14,7 +14,7 @@ const AuthSuccess = () => {
       api.get('/auth/me', { headers: { Authorization: `Bearer ${token}` } })
       .then(({ data }) => {
          login({ ...data.data, token }); 
-         navigate('/dashboard');
+         navigate('/');
       })
       .catch(() => navigate('/login'));
     } else {

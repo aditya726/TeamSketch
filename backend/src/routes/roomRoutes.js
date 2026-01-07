@@ -4,7 +4,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { createRoom, validateRoom } = require('../controllers/roomController');
+const { createRoom, validateRoom, joinRoom } = require('../controllers/roomController');
 const { protect } = require('../middleware/authMiddleware');
 
 /**
@@ -65,5 +65,32 @@ router.post('/create', protect, createRoom);
  *                   type: string
  */
 router.get('/validate/:roomId', validateRoom);
+
+/**
+ * @swagger
+ * /api/rooms/join:
+ *   post:
+ *     summary: Join a room (requires authentication)
+ *     tags: [Rooms]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               roomId:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Successfully joined room
+ *       400:
+ *         description: Invalid room ID
+ *       401:
+ *         description: Unauthorized
+ */
+router.post('/join', protect, joinRoom);
 
 module.exports = router;

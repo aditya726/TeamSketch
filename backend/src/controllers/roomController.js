@@ -3,6 +3,10 @@
  */
 
 const crypto = require('crypto');
+const { getRedisClient } = require('../config/redis');
+
+// Room expiry time (24 hours in seconds)
+const ROOM_EXPIRY = 24 * 60 * 60;
 
 /**
  * Generate a unique room ID
@@ -22,6 +26,25 @@ exports.createRoom = async (req, res) => {
   try {
     // Generate unique room ID
     const roomId = generateRoomId();
+    
+    // Store room in Redis with expiry
+    const redisClient = getRedisClient();
+    if (redisClient) {
+      try {
+        const roomData = JSON.stringify({
+          id: roomId,
+          createdBy: req.user.id,
+          createdAt: new Date().toISOString(),
+          creatorName: req.user.username || req.user.email
+        });
+        
+        // Store room with 24-hour expiry
+        await redisClient.setEx(`room:${roomId}`, ROOM_EXPIRY, roomData);
+        console.log(`[Room] Created room ${roomId} in Redis`);
+      } catch (redisError) {
+        console.error('[Room] Redis error, continuing without storage:', redisError);
+      }
+    }
 
     // Return the room ID
     res.status(200).json({
@@ -48,13 +71,43 @@ exports.validateRoom = async (req, res) => {
   try {
     const { roomId } = req.params;
 
-    // Simple validation - check if it's a valid format (8 hex characters)
-    const isValid = /^[A-F0-9]{8}$/.test(roomId);
+    // First check format - must be 8 hex characters
+    const isValidFormat = /^[A-F0-9]{8}$/.test(roomId);
+    
+    if (!isValidFormat) {
+      return res.status(200).json({
+        success: true,
+        isValid: false,
+        roomId,
+        reason: 'Invalid format'
+      });
+    }
+
+    // Check if room exists in Redis
+    const redisClient = getRedisClient();
+    let roomExists = true; // Default to true if Redis is not available
+    
+    if (redisClient) {
+      try {
+        const roomData = await redisClient.get(`room:${roomId}`);
+        roomExists = roomData !== null;
+        
+        if (roomExists) {
+          // Refresh room expiry when validated
+          await redisClient.expire(`room:${roomId}`, ROOM_EXPIRY);
+        }
+      } catch (redisError) {
+        console.error('[Room] Redis error during validation:', redisError);
+        // If Redis fails, allow joining (graceful degradation)
+        roomExists = true;
+      }
+    }
 
     res.status(200).json({
       success: true,
-      isValid,
-      roomId
+      isValid: roomExists,
+      roomId,
+      reason: roomExists ? 'Valid' : 'Room not found'
     });
   } catch (error) {
     console.error('Error validating room:', error);
@@ -83,17 +136,39 @@ exports.joinRoom = async (req, res) => {
     }
 
     // Check if room ID has valid format (8 hex characters)
-    const isValid = /^[A-F0-9]{8}$/.test(roomId);
+    const isValidFormat = /^[A-F0-9]{8}$/.test(roomId);
     
-    if (!isValid) {
+    if (!isValidFormat) {
       return res.status(400).json({
         success: false,
         message: 'Invalid room ID format'
       });
     }
 
-    // In a real app, you might want to check if the room exists in a database
-    // For now, we'll just validate the format and allow joining
+    // Check if room exists in Redis
+    const redisClient = getRedisClient();
+    let roomExists = true; // Default to true if Redis is not available
+    
+    if (redisClient) {
+      try {
+        const roomData = await redisClient.get(`room:${roomId}`);
+        roomExists = roomData !== null;
+        
+        if (!roomExists) {
+          return res.status(404).json({
+            success: false,
+            message: 'Room not found or has expired'
+          });
+        }
+        
+        // Refresh room expiry when someone joins
+        await redisClient.expire(`room:${roomId}`, ROOM_EXPIRY);
+        console.log(`[Room] User ${req.user.id} joined room ${roomId}`);
+      } catch (redisError) {
+        console.error('[Room] Redis error during join:', redisError);
+        // If Redis fails, allow joining (graceful degradation)
+      }
+    }
 
     res.status(200).json({
       success: true,
@@ -109,3 +184,4 @@ exports.joinRoom = async (req, res) => {
     });
   }
 };
+

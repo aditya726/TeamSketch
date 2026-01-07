@@ -33,3 +33,18 @@ export const validateRoom = async (roomId: string): Promise<ValidateRoomResponse
   const response = await api.get(`/rooms/validate/${roomId}`);
   return response.data;
 };
+
+export interface JoinRoomResponse {
+  success: boolean;
+  roomId: string;
+  message: string;
+  userId: string;
+}
+
+/**
+ * Join a room (requires authentication)
+ */
+export const joinRoom = async (roomId: string): Promise<JoinRoomResponse> => {
+  const response = await api.post('/rooms/join', { roomId });
+  return response.data;
+};

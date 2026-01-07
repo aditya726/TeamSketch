@@ -61,7 +61,7 @@ function validateDrawingPayload(object) {
  */
 function getRoomState(roomId) {
   if (!roomStates.has(roomId)) {
-    roomStates.set(roomId, { objects: [] });
+    roomStates.set(roomId, { objects: [], users: [] });
   }
   return roomStates.get(roomId);
 }
@@ -78,23 +78,42 @@ function initializeWhiteboardSocket(io) {
      * Handle client joining a room
      */
     socket.on('join-room', (payload) => {
-      const { roomId } = payload || {};
+      const { roomId, userId, userName } = payload || {};
 
       if (!roomId || typeof roomId !== 'string') {
         socket.emit('error', { message: 'Invalid room ID' });
         return;
       }
 
+      // Store room info on socket for later use
+      socket.currentRoomId = roomId;
+      socket.userId = userId || socket.id;
+      socket.userName = userName || `User-${socket.id.substring(0, 4)}`;
+
       // Join the room
       socket.join(roomId);
-      console.log(`[Socket] Client ${socket.id} joined room: ${roomId}`);
+      console.log(`[Socket] Client ${socket.id} (${socket.userName}) joined room: ${roomId}`);
 
       // Get current room state
       const roomState = getRoomState(roomId);
 
+      // Add user to room's user list if not already there
+      const userExists = roomState.users.find(u => u.id === socket.userId);
+      if (!userExists) {
+        roomState.users.push({
+          id: socket.userId,
+          name: socket.userName,
+          socketId: socket.id
+        });
+      }
+
       // Send current canvas state to the newly joined client
       socket.emit('room-state', roomState);
       console.log(`[Socket] Sent room state to ${socket.id} (${roomState.objects.length} objects)`);
+
+      // Broadcast updated user list to all clients in the room
+      io.to(roomId).emit('users-update', { users: roomState.users });
+      console.log(`[Socket] Broadcasted user list to room ${roomId} (${roomState.users.length} users)`);
     });
 
     /**
@@ -107,8 +126,15 @@ function initializeWhiteboardSocket(io) {
         return;
       }
 
+      // Remove user from room state
+      const roomState = getRoomState(roomId);
+      roomState.users = roomState.users.filter(u => u.socketId !== socket.id);
+
       socket.leave(roomId);
       console.log(`[Socket] Client ${socket.id} left room: ${roomId}`);
+
+      // Broadcast updated user list
+      io.to(roomId).emit('users-update', { users: roomState.users });
     });
 
     /**
@@ -135,6 +161,7 @@ function initializeWhiteboardSocket(io) {
       roomState.objects.push(object);
 
       // Broadcast to all clients in the room EXCEPT the sender
+      // Emit the complete object structure that Fabric.js needs
       socket.to(roomId).emit('draw', { object });
       console.log(`[Socket] Broadcasted draw event in room ${roomId} (type: ${object.type})`);
     });
@@ -163,6 +190,16 @@ function initializeWhiteboardSocket(io) {
      */
     socket.on('disconnect', () => {
       console.log(`[Socket] Client disconnected: ${socket.id}`);
+      
+      // Remove user from their current room if they were in one
+      if (socket.currentRoomId) {
+        const roomState = getRoomState(socket.currentRoomId);
+        roomState.users = roomState.users.filter(u => u.socketId !== socket.id);
+        
+        // Broadcast updated user list
+        io.to(socket.currentRoomId).emit('users-update', { users: roomState.users });
+        console.log(`[Socket] Removed user from room ${socket.currentRoomId}`);
+      }
     });
   });
 

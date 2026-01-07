@@ -3,6 +3,8 @@
  * Manages real-time collaborative whiteboard sessions with room support
  */
 
+const { getRedisClient } = require('../config/redis');
+
 /**
  * Configuration for whiteboard validation
  */
@@ -67,6 +69,33 @@ function getRoomState(roomId) {
 }
 
 /**
+ * Clean up empty room from memory and Redis
+ * @param {string} roomId - The room identifier
+ */
+async function cleanupEmptyRoom(roomId) {
+  const roomState = roomStates.get(roomId);
+  
+  // Check if room is empty
+  if (roomState && roomState.users.length === 0) {
+    console.log(`[Socket] Room ${roomId} is empty, cleaning up...`);
+    
+    // Delete from memory
+    roomStates.delete(roomId);
+    
+    // Delete from Redis
+    const redisClient = getRedisClient();
+    if (redisClient) {
+      try {
+        await redisClient.del(`room:${roomId}`);
+        console.log(`[Socket] Deleted room ${roomId} from Redis`);
+      } catch (error) {
+        console.error(`[Socket] Error deleting room ${roomId} from Redis:`, error);
+      }
+    }
+  }
+}
+
+/**
  * Initializes Socket.IO server with whiteboard logic
  * @param {Object} io - Socket.IO server instance
  */
@@ -119,7 +148,7 @@ function initializeWhiteboardSocket(io) {
     /**
      * Handle client leaving a room
      */
-    socket.on('leave-room', (payload) => {
+    socket.on('leave-room', async (payload) => {
       const { roomId } = payload || {};
 
       if (!roomId || typeof roomId !== 'string') {
@@ -135,6 +164,9 @@ function initializeWhiteboardSocket(io) {
 
       // Broadcast updated user list
       io.to(roomId).emit('users-update', { users: roomState.users });
+      
+      // Clean up room if empty
+      await cleanupEmptyRoom(roomId);
     });
 
     /**
@@ -188,7 +220,7 @@ function initializeWhiteboardSocket(io) {
     /**
      * Handle client disconnect
      */
-    socket.on('disconnect', () => {
+    socket.on('disconnect', async () => {
       console.log(`[Socket] Client disconnected: ${socket.id}`);
       
       // Remove user from their current room if they were in one
@@ -199,6 +231,9 @@ function initializeWhiteboardSocket(io) {
         // Broadcast updated user list
         io.to(socket.currentRoomId).emit('users-update', { users: roomState.users });
         console.log(`[Socket] Removed user from room ${socket.currentRoomId}`);
+        
+        // Clean up room if empty
+        await cleanupEmptyRoom(socket.currentRoomId);
       }
     });
   });

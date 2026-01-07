@@ -6,11 +6,17 @@ const passport = require('./config/passport');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./config/swagger');
 const connectDB = require('./config/database');
+const { initializeRedis } = require('./config/redis');
 
 const app = express();
 
 // Connect to MongoDB
 connectDB();
+
+// Initialize Redis (non-blocking)
+initializeRedis().catch(err => {
+  console.error('[App] Redis initialization failed, continuing without Redis:', err.message);
+});
 
 // CORS Configuration
 app.use(cors({

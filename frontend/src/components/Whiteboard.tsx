@@ -714,6 +714,8 @@ const Whiteboard: React.FC = () => {
           navigate('/login');
         } else if (err.response?.status === 400) {
           alert('Invalid room ID. Please check and try again.');
+        } else if (err.response?.status === 404) {
+          alert('Room not found or has expired. Please check the room ID.');
         } else {
           alert('Failed to join room. Please check the room ID and try again.');
         }
@@ -731,6 +733,27 @@ const Whiteboard: React.FC = () => {
       if(mode === 'room' && currentRoomId && socketRef.current) {
           socketRef.current.emit(ClientEvents.CLEAR_CANVAS, { roomId: currentRoomId });
       }
+  };
+
+  const handleLeaveRoom = () => {
+    if (mode === 'room' && currentRoomId && socketRef.current) {
+      // Emit leave room event
+      socketRef.current.emit(ClientEvents.LEAVE_ROOM, { roomId: currentRoomId });
+      
+      // Clear room state
+      setCurrentRoomId('');
+      setRoomId('');
+      setRoomUsers([]);
+      
+      // Clear localStorage
+      localStorage.removeItem('teamsketch-room-id');
+      localStorage.removeItem('teamsketch-mode');
+      
+      // Switch to solo mode
+      setMode('solo');
+      
+      console.log('[Whiteboard] Left room and switched to solo mode');
+    }
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -850,7 +873,7 @@ const Whiteboard: React.FC = () => {
                     </button>
                  </div>
                  <div className="text-[10px] font-bold text-green-600 mb-1 uppercase tracking-wider">Users ({roomUsers.length})</div>
-                 <div className="space-y-1">
+                 <div className="space-y-1 mb-3">
                    {roomUsers.map((roomUser) => (
                      <div key={roomUser.socketId} className="flex items-center gap-1.5">
                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
@@ -858,6 +881,15 @@ const Whiteboard: React.FC = () => {
                      </div>
                    ))}
                  </div>
+                 
+                 {/* Leave Room Button */}
+                 <button
+                   onClick={handleLeaveRoom}
+                   className="w-full py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
+                 >
+                   <LogOut size={14} />
+                   Leave Room
+                 </button>
              </motion.div>
         )}
 

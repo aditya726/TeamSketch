@@ -25,10 +25,20 @@ export interface DrawingPayload {
 }
 
 /**
+ * User in a room
+ */
+export interface RoomUser {
+  id: string;
+  name: string;
+  socketId: string;
+}
+
+/**
  * Room state containing all canvas objects
  */
 export interface RoomState {
   objects: DrawingPayload[];
+  users: RoomUser[];
 }
 
 /**
@@ -49,6 +59,7 @@ export enum ServerEvents {
   DRAW = 'draw',
   CLEAR_CANVAS = 'clear-canvas',
   ERROR = 'error',
+  USERS_UPDATE = 'users-update',
 }
 
 /**

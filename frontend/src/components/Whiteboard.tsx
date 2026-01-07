@@ -21,6 +21,7 @@ import {
   WhiteboardMode,
   DrawingPayload,
   RoomState,
+  RoomUser,
   ClientEvents,
   ServerEvents,
 } from '../types/whiteboard.types';
@@ -52,7 +53,7 @@ const Whiteboard: React.FC = () => {
 
   // --- State ---
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
   
   // Modes & Connectivity
   const [mode, setMode] = useState<WhiteboardMode>('solo');
@@ -62,6 +63,7 @@ const Whiteboard: React.FC = () => {
   const [isCreatingRoom, setIsCreatingRoom] = useState<boolean>(false);
   const [showRoomModal, setShowRoomModal] = useState<boolean>(false);
   const [copySuccess, setCopySuccess] = useState<boolean>(false);
+  const [roomUsers, setRoomUsers] = useState<RoomUser[]>([]);
 
   // Tools & Properties
   const [tool, setTool] = useState<WhiteboardTool>('pen'); 
@@ -233,20 +235,35 @@ const Whiteboard: React.FC = () => {
       }
     });
 
-    // Listeners for Undo/Redo History
-    canvas.on('path:created', (e: any) => {
-        handleObjectComplete(e.path);
-    });
-
-    canvas.on('object:modified', () => {
-        saveHistory();
-    });
-
     return () => {
       window.removeEventListener('resize', handleResize);
       canvas.dispose();
     };
-  }, []); 
+  }, []);
+
+  // Separate effect for canvas event listeners that depend on current state
+  useEffect(() => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+
+    const handlePathCreated = (e: any) => {
+      if (e.path) {
+        handleObjectComplete(e.path);
+      }
+    };
+
+    const handleObjectModified = () => {
+      saveHistory();
+    };
+
+    canvas.on('path:created', handlePathCreated);
+    canvas.on('object:modified', handleObjectModified);
+
+    return () => {
+      canvas.off('path:created', handlePathCreated);
+      canvas.off('object:modified', handleObjectModified);
+    };
+  }, [handleObjectComplete, saveHistory]); 
 
   // --- Effect: Tool & Property Switching ---
   useEffect(() => {
@@ -292,15 +309,31 @@ const Whiteboard: React.FC = () => {
 
   }, [tool, color, strokeWidth, fillColor]);
 
+  // --- Effect: Load room from localStorage on mount ---
+  useEffect(() => {
+    const savedRoomId = localStorage.getItem('teamsketch-room-id');
+    const savedMode = localStorage.getItem('teamsketch-mode');
+    
+    if (savedRoomId && savedMode === 'room') {
+      setRoomId(savedRoomId);
+      setMode('room');
+    }
+  }, []);
+
   // --- Effect: Socket.IO Logic ---
   useEffect(() => {
     if (mode !== 'room') {
       if (socketRef.current) {
-        if (currentRoomId) socketRef.current.emit(ClientEvents.LEAVE_ROOM, { roomId: currentRoomId });
+        if (currentRoomId) {
+          socketRef.current.emit(ClientEvents.LEAVE_ROOM, { roomId: currentRoomId });
+          localStorage.removeItem('teamsketch-room-id');
+          localStorage.removeItem('teamsketch-mode');
+        }
         socketRef.current.disconnect();
         socketRef.current = null;
         setIsConnected(false);
         setCurrentRoomId('');
+        setRoomUsers([]);
       }
       return;
     }
@@ -311,8 +344,24 @@ const Whiteboard: React.FC = () => {
     });
     socketRef.current = socket;
 
-    socket.on('connect', () => setIsConnected(true));
-    socket.on('disconnect', () => setIsConnected(false));
+    socket.on('connect', () => {
+      setIsConnected(true);
+      // Rejoin room if we were in one (after reconnect or page refresh)
+      const savedRoomId = localStorage.getItem('teamsketch-room-id');
+      if (savedRoomId) {
+        const socketId = socket.id || `guest-${Math.random().toString(36).substr(2, 9)}`;
+        socket.emit(ClientEvents.JOIN_ROOM, { 
+          roomId: savedRoomId,
+          userId: user?.id || socketId,
+          userName: user?.username || user?.email?.split('@')[0] || `User-${socketId.substring(0, 4)}`
+        });
+        setCurrentRoomId(savedRoomId);
+        setRoomId(savedRoomId);
+      }
+    });
+    socket.on('disconnect', () => {
+      setIsConnected(false);
+    });
     
     // Receive Drawing
     socket.on(ServerEvents.DRAW, (payload: { object: DrawingPayload }) => {
@@ -390,11 +439,17 @@ const Whiteboard: React.FC = () => {
         }
     });
 
+    // Users Update
+    socket.on(ServerEvents.USERS_UPDATE, (payload: { users: RoomUser[] }) => {
+        console.log('Users in room:', payload.users);
+        setRoomUsers(payload.users);
+    });
+
     return () => {
         if(currentRoomId) socket.emit(ClientEvents.LEAVE_ROOM, { roomId: currentRoomId });
         socket.disconnect();
     };
-  }, [mode]);
+  }, [mode, user]);
 
   // --- Handlers: Mouse Events ---
   useEffect(() => {
@@ -578,28 +633,91 @@ const Whiteboard: React.FC = () => {
 
   // --- Handlers: Room Actions ---
   const handleCreateRoom = async () => {
-    if (!isAuthenticated) { alert('Please login'); return; }
+    if (!isAuthenticated) { 
+      alert('Please login or register to create a room');
+      navigate('/login');
+      return; 
+    }
     setIsCreatingRoom(true);
     try {
         const response = await createRoom();
         if (response.success) {
             setRoomId(response.roomId);
             if (socketRef.current) {
-                socketRef.current.emit(ClientEvents.JOIN_ROOM, { roomId: response.roomId });
+                const socketId = socketRef.current.id || `guest-${Math.random().toString(36).substr(2, 9)}`;
+                socketRef.current.emit(ClientEvents.JOIN_ROOM, { 
+                  roomId: response.roomId,
+                  userId: user?.id || socketId,
+                  userName: user?.username || user?.email?.split('@')[0] || `User-${socketId.substring(0, 4)}`
+                });
                 setCurrentRoomId(response.roomId);
+                // Save to localStorage
+                localStorage.setItem('teamsketch-room-id', response.roomId);
+                localStorage.setItem('teamsketch-mode', 'room');
             }
             setShowRoomModal(false);
         }
-    } catch (err) { alert('Failed to create room'); } 
+    } catch (err: any) { 
+      console.error('Failed to create room:', err);
+      if (err.response?.status === 401) {
+        alert('Please login to create a room');
+        navigate('/login');
+      } else {
+        alert('Failed to create room. Please try again.');
+      }
+    } 
     finally { setIsCreatingRoom(false); }
   };
 
-  const handleJoinRoom = () => {
-      if(!roomId || !socketRef.current) return;
-      if(currentRoomId) socketRef.current.emit(ClientEvents.LEAVE_ROOM, { roomId: currentRoomId });
-      socketRef.current.emit(ClientEvents.JOIN_ROOM, { roomId: roomId });
-      setCurrentRoomId(roomId);
-      setShowRoomModal(false);
+  const handleJoinRoom = async () => {
+      if (!isAuthenticated) { 
+        alert('Please login or register to join a room');
+        navigate('/login');
+        return; 
+      }
+      
+      if(!roomId) {
+        alert('Please enter a room ID');
+        return;
+      }
+      
+      if(!socketRef.current) return;
+      
+      try {
+        // Validate room on backend before joining
+        const { joinRoom } = await import('../services/roomApi');
+        const response = await joinRoom(roomId);
+        
+        if (response.success) {
+          // Leave current room if already in one
+          if(currentRoomId) {
+            socketRef.current.emit(ClientEvents.LEAVE_ROOM, { roomId: currentRoomId });
+          }
+          
+          // Join the new room
+          const socketId = socketRef.current.id || `guest-${Math.random().toString(36).substr(2, 9)}`;
+          socketRef.current.emit(ClientEvents.JOIN_ROOM, { 
+            roomId: roomId,
+            userId: user?.id || socketId,
+            userName: user?.username || user?.email?.split('@')[0] || `User-${socketId.substring(0, 4)}`
+          });
+          setCurrentRoomId(roomId);
+          // Save to localStorage
+          localStorage.setItem('teamsketch-room-id', roomId);
+          localStorage.setItem('teamsketch-mode', 'room');
+          setShowRoomModal(false);
+        }
+      } catch (err: any) {
+        console.error('Failed to join room:', err);
+        if (err.response?.status === 401) {
+          alert('Please login to join a room');
+          navigate('/login');
+        } else if (err.response?.status === 400) {
+          alert('Invalid room ID. Please check and try again.');
+        } else {
+          alert('Failed to join room. Please check the room ID and try again.');
+        }
+      }
   };
 
   const handleClear = () => {
@@ -719,10 +837,10 @@ const Whiteboard: React.FC = () => {
              <motion.div 
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                className="bg-green-50 p-3 rounded-xl border border-green-200 shadow-sm"
+                className="bg-green-50 p-3 rounded-xl border border-green-200 shadow-sm max-w-[200px]"
              >
                  <div className="text-[10px] font-bold text-green-600 mb-1 uppercase tracking-wider">Active Room</div>
-                 <div className="flex items-center gap-2">
+                 <div className="flex items-center gap-2 mb-2">
                     <code className="text-sm font-bold text-zinc-700">{currentRoomId}</code>
                     <button 
                         onClick={() => { navigator.clipboard.writeText(currentRoomId); setCopySuccess(true); setTimeout(() => setCopySuccess(false), 2000); }}
@@ -730,6 +848,15 @@ const Whiteboard: React.FC = () => {
                     >
                         {copySuccess ? <Check size={14}/> : <Copy size={14}/>}
                     </button>
+                 </div>
+                 <div className="text-[10px] font-bold text-green-600 mb-1 uppercase tracking-wider">Users ({roomUsers.length})</div>
+                 <div className="space-y-1">
+                   {roomUsers.map((roomUser) => (
+                     <div key={roomUser.socketId} className="flex items-center gap-1.5">
+                       <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                       <span className="text-xs text-zinc-700 truncate">{roomUser.name}</span>
+                     </div>
+                   ))}
                  </div>
              </motion.div>
         )}

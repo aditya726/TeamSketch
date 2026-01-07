@@ -64,3 +64,48 @@ exports.validateRoom = async (req, res) => {
     });
   }
 };
+
+/**
+ * Join a room (requires authentication and validates room ID)
+ * @route POST /api/rooms/join
+ * @access Private
+ */
+exports.joinRoom = async (req, res) => {
+  try {
+    const { roomId } = req.body;
+
+    // Validate room ID format
+    if (!roomId || typeof roomId !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: 'Room ID is required'
+      });
+    }
+
+    // Check if room ID has valid format (8 hex characters)
+    const isValid = /^[A-F0-9]{8}$/.test(roomId);
+    
+    if (!isValid) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid room ID format'
+      });
+    }
+
+    // In a real app, you might want to check if the room exists in a database
+    // For now, we'll just validate the format and allow joining
+
+    res.status(200).json({
+      success: true,
+      roomId,
+      message: 'Room validated successfully',
+      userId: req.user.id
+    });
+  } catch (error) {
+    console.error('Error joining room:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to join room'
+    });
+  }
+};

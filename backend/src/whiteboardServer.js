@@ -10,10 +10,16 @@ const cors = require('cors');
 require('dotenv').config();
 
 const { initializeWhiteboardSocket } = require('./socket/whiteboardSocket');
+const { initializeRedis } = require('./config/redis');
 
 const app = express();
 const PORT = process.env.WHITEBOARD_PORT;
 const FRONTEND_URL = process.env.FRONTEND_URL;
+
+// Initialize Redis (non-blocking)
+initializeRedis().catch(err => {
+  console.error('[Whiteboard] Redis initialization failed, continuing without Redis:', err.message);
+});
 
 // Middleware
 app.use(cors({

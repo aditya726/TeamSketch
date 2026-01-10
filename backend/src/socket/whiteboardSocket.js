@@ -10,7 +10,7 @@ const { getRedisClient } = require('../config/redis');
  */
 const VALIDATION_CONFIG = {
   MAX_POINTS: 10000, // Maximum number of points in a path
-  ALLOWED_TYPES: ['path', 'circle', 'rect', 'line', 'text'], // Allowed object types
+  ALLOWED_TYPES: ['path', 'circle', 'rect', 'line', 'text','image'], // Allowed object types
   MAX_STROKE_WIDTH: 100, // Maximum stroke width
 };
 
@@ -215,6 +215,25 @@ function initializeWhiteboardSocket(io) {
       // Broadcast clear event to all clients in the room INCLUDING the sender
       io.to(roomId).emit('clear-canvas');
       console.log(`[Socket] Cleared canvas in room ${roomId}`);
+    });
+
+    /**
+     * Handle object deletion
+     */
+    socket.on('delete-object', (payload) => {
+    const { roomId, objectId } = payload || {};
+
+    if (!roomId || !objectId) return;
+
+    const roomState = getRoomState(roomId);
+
+    // Filter out the deleted object from the server-side state
+    // Note: This requires objects to have an 'id' property
+    roomState.objects = roomState.objects.filter(obj => obj.id !== objectId);
+
+    // Broadcast the deletion to all other users in the room
+    socket.to(roomId).emit('delete-object', { objectId });
+    console.log(`[Socket] Object ${objectId} deleted in room ${roomId}`);
     });
 
     /**

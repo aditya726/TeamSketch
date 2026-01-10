@@ -17,6 +17,7 @@ import {
   Users, Home, Copy, Check, LogOut, Trash2
 } from 'lucide-react';
 
+
 import {
   WhiteboardMode,
   DrawingPayload,
@@ -77,6 +78,7 @@ const Whiteboard: React.FC = () => {
   const [historyStep, setHistoryStep] = useState<number>(-1);
   const [zoomLevel, setZoomLevel] = useState(100);
   const MAX_HISTORY = 50;
+  
 
   useEffect(() => { historyStepRef.current = historyStep; }, [historyStep]);
 
@@ -179,6 +181,10 @@ const Whiteboard: React.FC = () => {
   const handleObjectComplete = useCallback((object: fabric.Object) => {
     if (!object) return;
 
+    // Ensure the object has a unique ID for syncing deletions
+    // if (!(object as any).id) {
+    //   (object as any).id = generateId();
+    // } 
     // 1. Save History locally
     saveHistory();
 
@@ -439,6 +445,20 @@ const Whiteboard: React.FC = () => {
         }
     });
 
+    // Receive Deletions from other users
+socket.on('delete-object', (payload: { objectId: string }) => {
+  const canvas = fabricCanvasRef.current;
+  if (!canvas) return;
+
+  // Find the object with the matching ID and remove it
+  const objectToRemove = canvas.getObjects().find((obj: any) => obj.id === payload.objectId);
+  if (objectToRemove) {
+    canvas.remove(objectToRemove);
+    canvas.renderAll();
+    saveHistory();
+  }
+});
+
     // Users Update
     socket.on(ServerEvents.USERS_UPDATE, (payload: { users: RoomUser[] }) => {
         console.log('Users in room:', payload.users);
@@ -450,7 +470,7 @@ const Whiteboard: React.FC = () => {
         socket.disconnect();
     };
   }, [mode, user]);
-
+ 
   // --- Handlers: Mouse Events ---
   useEffect(() => {
     const canvas = fabricCanvasRef.current;
@@ -513,15 +533,22 @@ const Whiteboard: React.FC = () => {
     }
 
     // Eraser acts immediately on mouse down if an object is targeted.
-    if (tool === 'eraser') {
-      isDrawingRef.current = false;
-      if (opt.target) {
-        canvas.remove(opt.target);
-        canvas.requestRenderAll();
-        saveHistory();
-      }
-      return;
+if (tool === 'eraser' && opt.target) {
+    const objectId = (opt.target as any).id;
+    
+    // 1. Remove locally
+    canvas.remove(opt.target);
+    saveHistory();
+
+    // 2. Sync deletion with the team
+    if (mode === 'room' && currentRoomId && socketRef.current) {
+      socketRef.current.emit('delete-object', {
+        roomId: currentRoomId,
+        objectId: objectId
+      });
     }
+    return;
+}
 
     // From here on we are creating a new shape -> mark drawing active
     isDrawingRef.current = true;

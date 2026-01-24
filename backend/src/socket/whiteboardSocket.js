@@ -10,7 +10,7 @@ const { getRedisClient } = require('../config/redis');
  */
 const VALIDATION_CONFIG = {
   MAX_POINTS: 10000, // Maximum number of points in a path
-  ALLOWED_TYPES: ['path', 'circle', 'rect', 'line', 'text','image'], // Allowed object types
+  ALLOWED_TYPES: ['path', 'circle', 'rect', 'line', 'text', 'image'], // Allowed object types
   MAX_STROKE_WIDTH: 100, // Maximum stroke width
 };
 
@@ -74,14 +74,14 @@ function getRoomState(roomId) {
  */
 async function cleanupEmptyRoom(roomId) {
   const roomState = roomStates.get(roomId);
-  
+
   // Check if room is empty
   if (roomState && roomState.users.length === 0) {
     console.log(`[Socket] Room ${roomId} is empty, cleaning up...`);
-    
+
     // Delete from memory
     roomStates.delete(roomId);
-    
+
     // Delete from Redis
     const redisClient = getRedisClient();
     if (redisClient) {
@@ -164,7 +164,7 @@ function initializeWhiteboardSocket(io) {
 
       // Broadcast updated user list
       io.to(roomId).emit('users-update', { users: roomState.users });
-      
+
       // Clean up room if empty
       await cleanupEmptyRoom(roomId);
     });
@@ -199,6 +199,53 @@ function initializeWhiteboardSocket(io) {
     });
 
     /**
+     * Handle object modification (move, resize, rotate)
+     */
+    socket.on('modify', (payload) => {
+      const { roomId, object } = payload || {};
+
+      if (!roomId || typeof roomId !== 'string' || !object || !object.id) {
+        return;
+      }
+
+      const roomState = getRoomState(roomId);
+
+      // Find and update object
+      const index = roomState.objects.findIndex(obj => obj.id === object.id);
+      if (index !== -1) {
+        // Update the object with new properties
+        roomState.objects[index] = { ...roomState.objects[index], ...object };
+
+        // Broadcast modification
+        socket.to(roomId).emit('modify', { object });
+        console.log(`[Socket] Modified object ${object.id} in room ${roomId}`);
+      }
+    });
+
+    /**
+     * Handle object deletion
+     */
+    socket.on('delete', (payload) => {
+      const { roomId, objectId } = payload || {};
+
+      if (!roomId || typeof roomId !== 'string' || !objectId) {
+        return;
+      }
+
+      const roomState = getRoomState(roomId);
+
+      // Filter out the deleted object
+      const initialLength = roomState.objects.length;
+      roomState.objects = roomState.objects.filter(obj => obj.id !== objectId);
+
+      if (roomState.objects.length < initialLength) {
+        // Broadcast deletion
+        socket.to(roomId).emit('delete', { objectId });
+        console.log(`[Socket] Deleted object ${objectId} from room ${roomId}`);
+      }
+    });
+
+    /**
      * Handle clear canvas events
      */
     socket.on('clear-canvas', (payload) => {
@@ -217,40 +264,23 @@ function initializeWhiteboardSocket(io) {
       console.log(`[Socket] Cleared canvas in room ${roomId}`);
     });
 
-    /**
-     * Handle object deletion
-     */
-    socket.on('delete-object', (payload) => {
-    const { roomId, objectId } = payload || {};
 
-    if (!roomId || !objectId) return;
-
-    const roomState = getRoomState(roomId);
-
-    // Filter out the deleted object from the server-side state
-    // Note: This requires objects to have an 'id' property
-    roomState.objects = roomState.objects.filter(obj => obj.id !== objectId);
-
-    // Broadcast the deletion to all other users in the room
-    socket.to(roomId).emit('delete-object', { objectId });
-    console.log(`[Socket] Object ${objectId} deleted in room ${roomId}`);
-    });
 
     /**
      * Handle client disconnect
      */
     socket.on('disconnect', async () => {
       console.log(`[Socket] Client disconnected: ${socket.id}`);
-      
+
       // Remove user from their current room if they were in one
       if (socket.currentRoomId) {
         const roomState = getRoomState(socket.currentRoomId);
         roomState.users = roomState.users.filter(u => u.socketId !== socket.id);
-        
+
         // Broadcast updated user list
         io.to(socket.currentRoomId).emit('users-update', { users: roomState.users });
         console.log(`[Socket] Removed user from room ${socket.currentRoomId}`);
-        
+
         // Clean up room if empty
         await cleanupEmptyRoom(socket.currentRoomId);
       }

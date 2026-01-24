@@ -7,13 +7,13 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
 import { createRoom } from '../services/roomApi';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
+import {
   // Toolbar Icons
-  MousePointer2, Hand, Square, Circle as CircleIcon, 
-  Diamond, ArrowRight, Minus, Pencil, Type, Image as ImageIcon, 
-  Eraser, 
+  MousePointer2, Hand, Square, Circle as CircleIcon,
+  Diamond, ArrowRight, Minus, Pencil, Type, Image as ImageIcon,
+  Eraser,
   // UI Icons
-  ZoomIn, ZoomOut, Undo, Redo, 
+  ZoomIn, ZoomOut, Undo, Redo,
   Users, Home, Copy, Check, LogOut, Trash2
 } from 'lucide-react';
 
@@ -28,34 +28,36 @@ import {
 } from '../types/whiteboard.types';
 
 // --- Types ---
-export type WhiteboardTool = 
-  | 'selection' | 'pan' | 'rectangle' | 'diamond' | 'circle' 
+export type WhiteboardTool =
+  | 'selection' | 'pan' | 'rectangle' | 'diamond' | 'circle'
   | 'arrow' | 'line' | 'pen' | 'text' | 'image' | 'eraser';
 
 const STYLABLE_TOOLS = ['rectangle', 'diamond', 'circle', 'arrow', 'line', 'pen', 'text'];
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL;
+
+const generateId = () => Math.random().toString(36).substr(2, 9);
 
 const Whiteboard: React.FC = () => {
   // --- Refs ---
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fabricCanvasRef = useRef<fabric.Canvas | null>(null);
   const socketRef = useRef<Socket | null>(null);
-  
+
   // State refs
-  const isDrawingRef = useRef<boolean>(false); 
+  const isDrawingRef = useRef<boolean>(false);
   const startPointRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const activeObjectRef = useRef<fabric.Object | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   // History Locking (prevents loops during undo/redo)
-  const isHistoryProcessing = useRef<boolean>(false); 
+  const isHistoryProcessing = useRef<boolean>(false);
   // Keep a ref of historyStep to avoid stale closures in saveHistory
   const historyStepRef = useRef<number>(-1);
 
   // --- State ---
   const navigate = useNavigate();
   const { isAuthenticated, user } = useAuthStore();
-  
+
   // Modes & Connectivity
   const [mode, setMode] = useState<WhiteboardMode>('solo');
   const [roomId, setRoomId] = useState<string>('');
@@ -67,23 +69,23 @@ const Whiteboard: React.FC = () => {
   const [roomUsers, setRoomUsers] = useState<RoomUser[]>([]);
 
   // Tools & Properties
-  const [tool, setTool] = useState<WhiteboardTool>('pen'); 
+  const [tool, setTool] = useState<WhiteboardTool>('pen');
   const [color, setColor] = useState<string>('#000000');
   const [strokeWidth, setStrokeWidth] = useState<number>(3);
   const [fillColor, setFillColor] = useState<string>('transparent');
   const [showProperties, setShowProperties] = useState(false);
-  
+
   // History & Zoom
   const [history, setHistory] = useState<string[]>([]);
   const [historyStep, setHistoryStep] = useState<number>(-1);
   const [zoomLevel, setZoomLevel] = useState(100);
   const MAX_HISTORY = 50;
-  
+
 
   useEffect(() => { historyStepRef.current = historyStep; }, [historyStep]);
 
   // --- 1. History (Undo/Redo) Management ---
-  
+
   // Save current canvas state to history
   const saveHistory = useCallback(() => {
     if (!fabricCanvasRef.current || isHistoryProcessing.current) return;
@@ -124,12 +126,12 @@ const Whiteboard: React.FC = () => {
     const previousState = history[previousIndex];
 
     canvas.loadFromJSON(previousState, () => {
-        canvas.renderAll();
-        setHistoryStep(previousIndex);
-        isHistoryProcessing.current = false;
-        
-        // Optional: In a real app, you might emit a specific 'UNDO' event to socket here
-        // For now, this is local visual undo
+      canvas.renderAll();
+      setHistoryStep(previousIndex);
+      isHistoryProcessing.current = false;
+
+      // Optional: In a real app, you might emit a specific 'UNDO' event to socket here
+      // For now, this is local visual undo
     });
   };
 
@@ -143,9 +145,9 @@ const Whiteboard: React.FC = () => {
     const nextState = history[nextIndex];
 
     canvas.loadFromJSON(nextState, () => {
-        canvas.renderAll();
-        setHistoryStep(nextIndex);
-        isHistoryProcessing.current = false;
+      canvas.renderAll();
+      setHistoryStep(nextIndex);
+      isHistoryProcessing.current = false;
     });
   };
 
@@ -153,7 +155,7 @@ const Whiteboard: React.FC = () => {
 
   const handleZoom = (type: 'in' | 'out' | 'reset') => {
     const canvas = fabricCanvasRef.current;
-    if(!canvas) return;
+    if (!canvas) return;
 
     let zoom = canvas.getZoom();
 
@@ -170,13 +172,13 @@ const Whiteboard: React.FC = () => {
     const cx = cCenter?.left ?? (canvas.getWidth ? canvas.getWidth() / 2 : 0);
     const cy = cCenter?.top ?? (canvas.getHeight ? canvas.getHeight() / 2 : 0);
     canvas.zoomToPoint(new fabric.Point(cx, cy), zoom);
-    
+
     setZoomLevel(Math.round(zoom * 100));
     canvas.renderAll();
   };
 
   // --- 3. Socket / Object Completion Helper ---
-  
+
   // This handles sending data to Socket AND triggering history save
   const handleObjectComplete = useCallback((object: fabric.Object) => {
     if (!object) return;
@@ -190,7 +192,7 @@ const Whiteboard: React.FC = () => {
 
     // 2. Emit to Socket
     if (mode === 'room' && currentRoomId && socketRef.current) {
-      const serialized = object.toObject() as DrawingPayload;
+      const serialized = object.toObject(['id']) as DrawingPayload;
       socketRef.current.emit(ClientEvents.DRAW, {
         roomId: currentRoomId,
         object: serialized,
@@ -203,7 +205,7 @@ const Whiteboard: React.FC = () => {
     if (!canvasRef.current) return;
 
     const canvas = new fabric.Canvas(canvasRef.current, {
-      isDrawingMode: true, 
+      isDrawingMode: true,
       selection: false,
       width: window.innerWidth,
       height: window.innerHeight,
@@ -254,22 +256,36 @@ const Whiteboard: React.FC = () => {
 
     const handlePathCreated = (e: any) => {
       if (e.path) {
+        (e.path as any).id = generateId();
         handleObjectComplete(e.path);
       }
     };
 
-    const handleObjectModified = () => {
+    const handleObjectModified = (e: any) => {
       saveHistory();
+
+      const target = e.target;
+      if (!target) return;
+
+      if (mode === 'room' && currentRoomId && socketRef.current) {
+        // Emit modify event
+        socketRef.current.emit(ClientEvents.MODIFY, {
+          roomId: currentRoomId,
+          object: target.toObject(['id']) as DrawingPayload
+        });
+      }
     };
 
     canvas.on('path:created', handlePathCreated);
     canvas.on('object:modified', handleObjectModified);
+    canvas.on('text:editing:exited', handleObjectModified);
 
     return () => {
       canvas.off('path:created', handlePathCreated);
       canvas.off('object:modified', handleObjectModified);
+      canvas.off('text:editing:exited', handleObjectModified);
     };
-  }, [handleObjectComplete, saveHistory]); 
+  }, [mode, currentRoomId, handleObjectComplete, saveHistory]);
 
   // --- Effect: Tool & Property Switching ---
   useEffect(() => {
@@ -299,7 +315,7 @@ const Whiteboard: React.FC = () => {
       canvas.defaultCursor = 'grab';
       canvas.hoverCursor = 'grab';
     } else if (tool === 'eraser') {
-      canvas.defaultCursor = 'not-allowed'; 
+      canvas.defaultCursor = 'not-allowed';
     } else {
       canvas.defaultCursor = 'crosshair';
     }
@@ -307,10 +323,10 @@ const Whiteboard: React.FC = () => {
     // Update active object styles
     const activeObj = canvas.getActiveObject();
     if (activeObj && tool === 'selection') {
-        activeObj.set({ stroke: color, strokeWidth: strokeWidth, fill: fillColor });
-        canvas.requestRenderAll();
-        // If we change properties of an existing object, save history
-        saveHistory(); 
+      activeObj.set({ stroke: color, strokeWidth: strokeWidth, fill: fillColor });
+      canvas.requestRenderAll();
+      // If we change properties of an existing object, save history
+      saveHistory();
     }
 
   }, [tool, color, strokeWidth, fillColor]);
@@ -319,7 +335,7 @@ const Whiteboard: React.FC = () => {
   useEffect(() => {
     const savedRoomId = localStorage.getItem('teamsketch-room-id');
     const savedMode = localStorage.getItem('teamsketch-mode');
-    
+
     if (savedRoomId && savedMode === 'room') {
       setRoomId(savedRoomId);
       setMode('room');
@@ -356,7 +372,7 @@ const Whiteboard: React.FC = () => {
       const savedRoomId = localStorage.getItem('teamsketch-room-id');
       if (savedRoomId) {
         const socketId = socket.id || `guest-${Math.random().toString(36).substr(2, 9)}`;
-        socket.emit(ClientEvents.JOIN_ROOM, { 
+        socket.emit(ClientEvents.JOIN_ROOM, {
           roomId: savedRoomId,
           userId: user?.id || socketId,
           userName: user?.username || user?.email?.split('@')[0] || `User-${socketId.substring(0, 4)}`
@@ -368,21 +384,21 @@ const Whiteboard: React.FC = () => {
     socket.on('disconnect', () => {
       setIsConnected(false);
     });
-    
+
     // Receive Drawing
     socket.on(ServerEvents.DRAW, (payload: { object: DrawingPayload }) => {
       const canvas = fabricCanvasRef.current;
       if (!canvas) return;
-      
+
       // Lock history so incoming changes don't trigger a "local save" and mess up the undo stack
-      isHistoryProcessing.current = true; 
-      
+      isHistoryProcessing.current = true;
+
       fabric.util.enlivenObjects([payload.object], (objects: fabric.Object[]) => {
         objects.forEach((obj) => {
-            canvas.add(obj);
+          canvas.add(obj);
         });
         canvas.renderAll();
-        
+
         // After adding remote object, update the history stack silently
         // We push the new state but don't increment the 'user action' count if we want strict local undo,
         // BUT for simplicity in this demo, we just sync history so everything is consistent.
@@ -404,73 +420,101 @@ const Whiteboard: React.FC = () => {
           }
           return newHistory;
         });
-        
+
         isHistoryProcessing.current = false;
       }, 'fabric');
     });
 
     // Receive Room State
     socket.on(ServerEvents.ROOM_STATE, (state: RoomState) => {
-        const canvas = fabricCanvasRef.current;
-        if (!canvas) return;
-        
-        isHistoryProcessing.current = true;
-        canvas.clear();
-        canvas.backgroundColor = '#ffffff';
-        if (state.objects.length > 0) {
-            fabric.util.enlivenObjects(state.objects, (objects: fabric.Object[]) => {
-                objects.forEach((obj) => canvas.add(obj));
-                canvas.renderAll();
-                
-                // Reset history to this room state
-                const json = JSON.stringify(canvas.toJSON());
-                setHistory([json]);
-                setHistoryStep(0);
-                
-                isHistoryProcessing.current = false;
-            }, 'fabric');
-        } else {
-            isHistoryProcessing.current = false;
-        }
+      const canvas = fabricCanvasRef.current;
+      if (!canvas) return;
+
+      isHistoryProcessing.current = true;
+      canvas.clear();
+      canvas.backgroundColor = '#ffffff';
+      if (state.objects.length > 0) {
+        fabric.util.enlivenObjects(state.objects, (objects: fabric.Object[]) => {
+          objects.forEach((obj) => canvas.add(obj));
+          canvas.renderAll();
+
+          // Reset history to this room state
+          const json = JSON.stringify(canvas.toJSON());
+          setHistory([json]);
+          setHistoryStep(0);
+
+          isHistoryProcessing.current = false;
+        }, 'fabric');
+      } else {
+        isHistoryProcessing.current = false;
+      }
     });
 
     // Clear Canvas
     socket.on(ServerEvents.CLEAR_CANVAS, () => {
-        const canvas = fabricCanvasRef.current;
-        if(canvas) {
-            canvas.clear();
-            canvas.backgroundColor = '#ffffff';
-            canvas.renderAll();
-            saveHistory(); // Save the cleared state
-        }
+      const canvas = fabricCanvasRef.current;
+      if (canvas) {
+        canvas.clear();
+        canvas.backgroundColor = '#ffffff';
+        canvas.renderAll();
+        saveHistory(); // Save the cleared state
+      }
     });
 
-    // Receive Deletions from other users
-socket.on('delete-object', (payload: { objectId: string }) => {
-  const canvas = fabricCanvasRef.current;
-  if (!canvas) return;
 
-  // Find the object with the matching ID and remove it
-  const objectToRemove = canvas.getObjects().find((obj: any) => obj.id === payload.objectId);
-  if (objectToRemove) {
-    canvas.remove(objectToRemove);
-    canvas.renderAll();
-    saveHistory();
-  }
-});
 
     // Users Update
     socket.on(ServerEvents.USERS_UPDATE, (payload: { users: RoomUser[] }) => {
-        console.log('Users in room:', payload.users);
-        setRoomUsers(payload.users);
+      console.log('Users in room:', payload.users);
+      setRoomUsers(payload.users);
+    });
+
+    // Modify Event
+    socket.on(ServerEvents.MODIFY, (payload: { object: DrawingPayload }) => {
+      const canvas = fabricCanvasRef.current;
+      if (!canvas) return;
+
+      const { object } = payload;
+      if (!object.id) return;
+
+      const targetObj = canvas.getObjects().find((obj: any) => obj.id === object.id);
+
+      if (targetObj) {
+        isHistoryProcessing.current = true;
+        // set function handles most properties, but for specific ones like left/top/scale we pass the whole object
+        targetObj.set(object);
+        targetObj.setCoords();
+        canvas.renderAll();
+        saveHistory();
+        isHistoryProcessing.current = false;
+      }
+    });
+
+    // Delete Event
+    socket.on(ServerEvents.DELETE, (payload: { objectId: string }) => {
+      const canvas = fabricCanvasRef.current;
+      if (!canvas) return;
+
+      const { objectId } = payload;
+      if (!objectId) return;
+
+      const targetObj = canvas.getObjects().find((obj: any) => obj.id === objectId);
+
+      if (targetObj) {
+        isHistoryProcessing.current = true;
+        canvas.remove(targetObj);
+        canvas.renderAll();
+        saveHistory();
+        isHistoryProcessing.current = false;
+      }
     });
 
     return () => {
-        if(currentRoomId) socket.emit(ClientEvents.LEAVE_ROOM, { roomId: currentRoomId });
-        socket.disconnect();
+      if (currentRoomId) socket.emit(ClientEvents.LEAVE_ROOM, { roomId: currentRoomId });
+      socket.disconnect();
     };
   }, [mode, user]);
- 
+
   // --- Handlers: Mouse Events ---
   useEffect(() => {
     const canvas = fabricCanvasRef.current;
@@ -485,18 +529,18 @@ socket.on('delete-object', (payload: { objectId: string }) => {
     canvas.on('mouse:up', handleMouseUp);
 
     return () => {
-        canvas.off('mouse:down');
-        canvas.off('mouse:move');
-        canvas.off('mouse:up');
+      canvas.off('mouse:down');
+      canvas.off('mouse:move');
+      canvas.off('mouse:up');
     };
-  }, [tool, color, strokeWidth, fillColor, handleObjectComplete]); 
+  }, [tool, color, strokeWidth, fillColor, handleObjectComplete]);
 
   const handleMouseDown = (opt: any) => {
     const canvas = fabricCanvasRef.current;
     if (!canvas) return;
     const { e } = opt;
     const pointer = canvas.getPointer(e);
-    
+
     startPointRef.current = { x: pointer.x, y: pointer.y };
 
     // If user clicked an existing object, activate it and do not start creating a new shape.
@@ -504,9 +548,17 @@ socket.on('delete-object', (payload: { objectId: string }) => {
       // For eraser we still want to remove on click (handled below), for pen/pan/selection let Fabric handle it.
       if (tool === 'eraser') {
         isDrawingRef.current = false;
+        const targetId = (opt.target as any).id;
         canvas.remove(opt.target);
         canvas.requestRenderAll();
         saveHistory();
+
+        if (mode === 'room' && currentRoomId && socketRef.current && targetId) {
+          socketRef.current.emit(ClientEvents.DELETE, {
+            roomId: currentRoomId,
+            objectId: targetId
+          });
+        }
         return;
       }
 
@@ -533,22 +585,23 @@ socket.on('delete-object', (payload: { objectId: string }) => {
     }
 
     // Eraser acts immediately on mouse down if an object is targeted.
-if (tool === 'eraser' && opt.target) {
-    const objectId = (opt.target as any).id;
-    
-    // 1. Remove locally
-    canvas.remove(opt.target);
-    saveHistory();
+    if (tool === 'eraser') {
+      isDrawingRef.current = false;
+      if (opt.target) {
+        const targetId = (opt.target as any).id;
+        canvas.remove(opt.target);
+        canvas.requestRenderAll();
+        saveHistory();
 
-    // 2. Sync deletion with the team
-    if (mode === 'room' && currentRoomId && socketRef.current) {
-      socketRef.current.emit('delete-object', {
-        roomId: currentRoomId,
-        objectId: objectId
-      });
+        if (mode === 'room' && currentRoomId && socketRef.current && targetId) {
+          socketRef.current.emit(ClientEvents.DELETE, {
+            roomId: currentRoomId,
+            objectId: targetId
+          });
+        }
+      }
+      return;
     }
-    return;
-}
 
     // From here on we are creating a new shape -> mark drawing active
     isDrawingRef.current = true;
@@ -556,6 +609,7 @@ if (tool === 'eraser' && opt.target) {
     // Shape Creation
     let newObj: fabric.Object | null = null;
     const commonProps = {
+      id: generateId(),
       left: pointer.x,
       top: pointer.y,
       stroke: color,
@@ -584,9 +638,10 @@ if (tool === 'eraser' && opt.target) {
       });
     } else if (tool === 'text') {
       const text = new fabric.IText('Type here', {
+        id: generateId(), // Explicitly add ID for text
         left: pointer.x, top: pointer.y,
         fontFamily: 'Architects Daughter', fill: color, fontSize: 24
-      });
+      } as any);
       canvas.add(text);
       canvas.setActiveObject(text);
       text.enterEditing();
@@ -607,7 +662,7 @@ if (tool === 'eraser' && opt.target) {
   const handleMouseMove = (opt: any) => {
     const canvas = fabricCanvasRef.current;
     if (!canvas || !isDrawingRef.current) return;
-    
+
     const { e } = opt;
     const pointer = canvas.getPointer(e);
 
@@ -626,19 +681,19 @@ if (tool === 'eraser' && opt.target) {
     if (!activeObj) return;
 
     if (tool === 'rectangle') {
-        const width = pointer.x - startX;
-        const height = pointer.y - startY;
-        activeObj.set({ width: Math.abs(width), height: Math.abs(height) });
-        activeObj.set({ left: width > 0 ? startX : pointer.x, top: height > 0 ? startY : pointer.y });
+      const width = pointer.x - startX;
+      const height = pointer.y - startY;
+      activeObj.set({ width: Math.abs(width), height: Math.abs(height) });
+      activeObj.set({ left: width > 0 ? startX : pointer.x, top: height > 0 ? startY : pointer.y });
     } else if (tool === 'diamond') {
-        const width = Math.abs(pointer.x - startX) * 2; 
-        const height = Math.abs(pointer.y - startY) * 2;
-        activeObj.set({ width: width, height: height });
+      const width = Math.abs(pointer.x - startX) * 2;
+      const height = Math.abs(pointer.y - startY) * 2;
+      activeObj.set({ width: width, height: height });
     } else if (tool === 'circle') {
-        const radius = Math.sqrt(Math.pow(pointer.x - startX, 2) + Math.pow(pointer.y - startY, 2));
-        (activeObj as fabric.Circle).set({ radius: radius });
+      const radius = Math.sqrt(Math.pow(pointer.x - startX, 2) + Math.pow(pointer.y - startY, 2));
+      (activeObj as fabric.Circle).set({ radius: radius });
     } else if (tool === 'line' || tool === 'arrow') {
-        (activeObj as fabric.Line).set({ x2: pointer.x, y2: pointer.y });
+      (activeObj as fabric.Line).set({ x2: pointer.x, y2: pointer.y });
     }
 
     canvas.renderAll();
@@ -652,39 +707,39 @@ if (tool === 'eraser' && opt.target) {
     if (tool === 'pan') canvas.setCursor('grab');
 
     if (activeObjectRef.current) {
-        activeObjectRef.current.setCoords();
-        handleObjectComplete(activeObjectRef.current);
+      activeObjectRef.current.setCoords();
+      handleObjectComplete(activeObjectRef.current);
     }
     activeObjectRef.current = null;
   };
 
   // --- Handlers: Room Actions ---
   const handleCreateRoom = async () => {
-    if (!isAuthenticated) { 
+    if (!isAuthenticated) {
       alert('Please login or register to create a room');
       navigate('/login');
-      return; 
+      return;
     }
     setIsCreatingRoom(true);
     try {
-        const response = await createRoom();
-        if (response.success) {
-            setRoomId(response.roomId);
-            if (socketRef.current) {
-                const socketId = socketRef.current.id || `guest-${Math.random().toString(36).substr(2, 9)}`;
-                socketRef.current.emit(ClientEvents.JOIN_ROOM, { 
-                  roomId: response.roomId,
-                  userId: user?.id || socketId,
-                  userName: user?.username || user?.email?.split('@')[0] || `User-${socketId.substring(0, 4)}`
-                });
-                setCurrentRoomId(response.roomId);
-                // Save to localStorage
-                localStorage.setItem('teamsketch-room-id', response.roomId);
-                localStorage.setItem('teamsketch-mode', 'room');
-            }
-            setShowRoomModal(false);
+      const response = await createRoom();
+      if (response.success) {
+        setRoomId(response.roomId);
+        if (socketRef.current) {
+          const socketId = socketRef.current.id || `guest-${Math.random().toString(36).substr(2, 9)}`;
+          socketRef.current.emit(ClientEvents.JOIN_ROOM, {
+            roomId: response.roomId,
+            userId: user?.id || socketId,
+            userName: user?.username || user?.email?.split('@')[0] || `User-${socketId.substring(0, 4)}`
+          });
+          setCurrentRoomId(response.roomId);
+          // Save to localStorage
+          localStorage.setItem('teamsketch-room-id', response.roomId);
+          localStorage.setItem('teamsketch-mode', 'room');
         }
-    } catch (err: any) { 
+        setShowRoomModal(false);
+      }
+    } catch (err: any) {
       console.error('Failed to create room:', err);
       if (err.response?.status === 401) {
         alert('Please login to create a room');
@@ -692,93 +747,93 @@ if (tool === 'eraser' && opt.target) {
       } else {
         alert('Failed to create room. Please try again.');
       }
-    } 
+    }
     finally { setIsCreatingRoom(false); }
   };
 
   const handleJoinRoom = async () => {
-      if (!isAuthenticated) { 
-        alert('Please login or register to join a room');
+    if (!isAuthenticated) {
+      alert('Please login or register to join a room');
+      navigate('/login');
+      return;
+    }
+
+    if (!roomId) {
+      alert('Please enter a room ID');
+      return;
+    }
+
+    if (!socketRef.current) return;
+
+    try {
+      // Validate room on backend before joining
+      const { joinRoom } = await import('../services/roomApi');
+      const response = await joinRoom(roomId);
+
+      if (response.success) {
+        // Leave current room if already in one
+        if (currentRoomId) {
+          socketRef.current.emit(ClientEvents.LEAVE_ROOM, { roomId: currentRoomId });
+        }
+
+        // Join the new room
+        const socketId = socketRef.current.id || `guest-${Math.random().toString(36).substr(2, 9)}`;
+        socketRef.current.emit(ClientEvents.JOIN_ROOM, {
+          roomId: roomId,
+          userId: user?.id || socketId,
+          userName: user?.username || user?.email?.split('@')[0] || `User-${socketId.substring(0, 4)}`
+        });
+        setCurrentRoomId(roomId);
+        // Save to localStorage
+        localStorage.setItem('teamsketch-room-id', roomId);
+        localStorage.setItem('teamsketch-mode', 'room');
+        setShowRoomModal(false);
+      }
+    } catch (err: any) {
+      console.error('Failed to join room:', err);
+      if (err.response?.status === 401) {
+        alert('Please login to join a room');
         navigate('/login');
-        return; 
+      } else if (err.response?.status === 400) {
+        alert('Invalid room ID. Please check and try again.');
+      } else if (err.response?.status === 404) {
+        alert('Room not found or has expired. Please check the room ID.');
+      } else {
+        alert('Failed to join room. Please check the room ID and try again.');
       }
-      
-      if(!roomId) {
-        alert('Please enter a room ID');
-        return;
-      }
-      
-      if(!socketRef.current) return;
-      
-      try {
-        // Validate room on backend before joining
-        const { joinRoom } = await import('../services/roomApi');
-        const response = await joinRoom(roomId);
-        
-        if (response.success) {
-          // Leave current room if already in one
-          if(currentRoomId) {
-            socketRef.current.emit(ClientEvents.LEAVE_ROOM, { roomId: currentRoomId });
-          }
-          
-          // Join the new room
-          const socketId = socketRef.current.id || `guest-${Math.random().toString(36).substr(2, 9)}`;
-          socketRef.current.emit(ClientEvents.JOIN_ROOM, { 
-            roomId: roomId,
-            userId: user?.id || socketId,
-            userName: user?.username || user?.email?.split('@')[0] || `User-${socketId.substring(0, 4)}`
-          });
-          setCurrentRoomId(roomId);
-          // Save to localStorage
-          localStorage.setItem('teamsketch-room-id', roomId);
-          localStorage.setItem('teamsketch-mode', 'room');
-          setShowRoomModal(false);
-        }
-      } catch (err: any) {
-        console.error('Failed to join room:', err);
-        if (err.response?.status === 401) {
-          alert('Please login to join a room');
-          navigate('/login');
-        } else if (err.response?.status === 400) {
-          alert('Invalid room ID. Please check and try again.');
-        } else if (err.response?.status === 404) {
-          alert('Room not found or has expired. Please check the room ID.');
-        } else {
-          alert('Failed to join room. Please check the room ID and try again.');
-        }
-      }
+    }
   };
 
   const handleClear = () => {
-      const canvas = fabricCanvasRef.current;
-      if(!canvas) return;
-      canvas.clear();
-      canvas.backgroundColor = '#ffffff';
-      canvas.renderAll();
-      saveHistory(); // Save blank state
-      
-      if(mode === 'room' && currentRoomId && socketRef.current) {
-          socketRef.current.emit(ClientEvents.CLEAR_CANVAS, { roomId: currentRoomId });
-      }
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+    canvas.clear();
+    canvas.backgroundColor = '#ffffff';
+    canvas.renderAll();
+    saveHistory(); // Save blank state
+
+    if (mode === 'room' && currentRoomId && socketRef.current) {
+      socketRef.current.emit(ClientEvents.CLEAR_CANVAS, { roomId: currentRoomId });
+    }
   };
 
   const handleLeaveRoom = () => {
     if (mode === 'room' && currentRoomId && socketRef.current) {
       // Emit leave room event
       socketRef.current.emit(ClientEvents.LEAVE_ROOM, { roomId: currentRoomId });
-      
+
       // Clear room state
       setCurrentRoomId('');
       setRoomId('');
       setRoomUsers([]);
-      
+
       // Clear localStorage
       localStorage.removeItem('teamsketch-room-id');
       localStorage.removeItem('teamsketch-mode');
-      
+
       // Switch to solo mode
       setMode('solo');
-      
+
       console.log('[Whiteboard] Left room and switched to solo mode');
     }
   };
@@ -788,13 +843,14 @@ if (tool === 'eraser' && opt.target) {
     if (!file || !fabricCanvasRef.current) return;
     const reader = new FileReader();
     reader.onload = (f) => {
-        fabric.Image.fromURL(f.target?.result as string, (img) => {
-            img.scaleToWidth(200);
-            fabricCanvasRef.current?.add(img);
-            fabricCanvasRef.current?.centerObject(img);
-            fabricCanvasRef.current?.setActiveObject(img);
-            handleObjectComplete(img); 
-        });
+      fabric.Image.fromURL(f.target?.result as string, (img) => {
+        (img as any).id = generateId();
+        img.scaleToWidth(200);
+        fabricCanvasRef.current?.add(img);
+        fabricCanvasRef.current?.centerObject(img);
+        fabricCanvasRef.current?.setActiveObject(img);
+        handleObjectComplete(img);
+      });
     };
     reader.readAsDataURL(file);
     setTool('selection');
@@ -804,11 +860,10 @@ if (tool === 'eraser' && opt.target) {
   const ToolBtn = ({ active, onClick, icon: Icon, label }: any) => (
     <button
       onClick={onClick}
-      className={`group relative p-2.5 rounded-xl transition-all ${
-        active 
-          ? 'bg-indigo-600 text-white shadow-md scale-105' 
-          : 'text-zinc-500 hover:bg-zinc-100'
-      }`}
+      className={`group relative p-2.5 rounded-xl transition-all ${active
+        ? 'bg-indigo-600 text-white shadow-md scale-105'
+        : 'text-zinc-500 hover:bg-zinc-100'
+        }`}
       title={label}
     >
       <Icon size={20} strokeWidth={active ? 2.5 : 2} />
@@ -820,171 +875,171 @@ if (tool === 'eraser' && opt.target) {
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-[#f8f9fa] font-architects">
-      
+
       {/* --- 1. CENTERED FLOATING TOOLBAR --- */}
       <div className="absolute top-4 left-0 right-0 flex justify-center z-50 pointer-events-none">
-        <motion.div 
-            initial={{ y: -50, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            className="pointer-events-auto bg-white rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.08)] border border-zinc-200 p-1.5 flex items-center gap-1"
+        <motion.div
+          initial={{ y: -50, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          className="pointer-events-auto bg-white rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.08)] border border-zinc-200 p-1.5 flex items-center gap-1"
         >
-            <ToolBtn active={tool === 'pan'} onClick={() => setTool('pan')} icon={Hand} label="Pan" />
-            <ToolBtn active={tool === 'selection'} onClick={() => setTool('selection')} icon={MousePointer2} label="Selection" />
-            <div className="w-px h-6 bg-zinc-200 mx-1" />
-            
-            <ToolBtn active={tool === 'rectangle'} onClick={() => setTool('rectangle')} icon={Square} label="Rectangle" />
-            <ToolBtn active={tool === 'diamond'} onClick={() => setTool('diamond')} icon={Diamond} label="Diamond" />
-            <ToolBtn active={tool === 'circle'} onClick={() => setTool('circle')} icon={CircleIcon} label="Circle" />
-            <ToolBtn active={tool === 'arrow'} onClick={() => setTool('arrow')} icon={ArrowRight} label="Arrow" />
-            <ToolBtn active={tool === 'line'} onClick={() => setTool('line')} icon={Minus} label="Line" />
-            <ToolBtn active={tool === 'pen'} onClick={() => setTool('pen')} icon={Pencil} label="Draw" />
-            <div className="w-px h-6 bg-zinc-200 mx-1" />
+          <ToolBtn active={tool === 'pan'} onClick={() => setTool('pan')} icon={Hand} label="Pan" />
+          <ToolBtn active={tool === 'selection'} onClick={() => setTool('selection')} icon={MousePointer2} label="Selection" />
+          <div className="w-px h-6 bg-zinc-200 mx-1" />
 
-            <ToolBtn active={tool === 'text'} onClick={() => setTool('text')} icon={Type} label="Text" />
-            <ToolBtn active={tool === 'image'} onClick={() => fileInputRef.current?.click()} icon={ImageIcon} label="Image" />
-            <input type="file" ref={fileInputRef} onChange={handleImageUpload} hidden accept="image/*" />
-            
-            <ToolBtn active={tool === 'eraser'} onClick={() => setTool('eraser')} icon={Eraser} label="Eraser" />
-            <div className="w-px h-6 bg-zinc-200 mx-1" />
-            
-            <button onClick={handleClear} className="p-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-colors" title="Clear Canvas">
-                <Trash2 size={20} />
-            </button>
+          <ToolBtn active={tool === 'rectangle'} onClick={() => setTool('rectangle')} icon={Square} label="Rectangle" />
+          <ToolBtn active={tool === 'diamond'} onClick={() => setTool('diamond')} icon={Diamond} label="Diamond" />
+          <ToolBtn active={tool === 'circle'} onClick={() => setTool('circle')} icon={CircleIcon} label="Circle" />
+          <ToolBtn active={tool === 'arrow'} onClick={() => setTool('arrow')} icon={ArrowRight} label="Arrow" />
+          <ToolBtn active={tool === 'line'} onClick={() => setTool('line')} icon={Minus} label="Line" />
+          <ToolBtn active={tool === 'pen'} onClick={() => setTool('pen')} icon={Pencil} label="Draw" />
+          <div className="w-px h-6 bg-zinc-200 mx-1" />
+
+          <ToolBtn active={tool === 'text'} onClick={() => setTool('text')} icon={Type} label="Text" />
+          <ToolBtn active={tool === 'image'} onClick={() => fileInputRef.current?.click()} icon={ImageIcon} label="Image" />
+          <input type="file" ref={fileInputRef} onChange={handleImageUpload} hidden accept="image/*" />
+
+          <ToolBtn active={tool === 'eraser'} onClick={() => setTool('eraser')} icon={Eraser} label="Eraser" />
+          <div className="w-px h-6 bg-zinc-200 mx-1" />
+
+          <button onClick={handleClear} className="p-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-colors" title="Clear Canvas">
+            <Trash2 size={20} />
+          </button>
         </motion.div>
       </div>
 
       {/* --- 2. LEFT SIDEBAR: ROOM & PROPERTIES --- */}
       <div className="absolute top-4 left-4 flex flex-col gap-3 z-40">
-        
+
         {/* Persistent Mode Controls */}
-        <motion.div 
-            initial={{ x: -50, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            className="bg-white p-2 rounded-xl shadow-lg border border-zinc-200 flex flex-col gap-2"
+        <motion.div
+          initial={{ x: -50, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          className="bg-white p-2 rounded-xl shadow-lg border border-zinc-200 flex flex-col gap-2"
         >
-             <Link to="/" className="p-2.5 text-zinc-500 hover:bg-zinc-100 rounded-lg block text-center" title="Back to Home">
-                 <Home size={20} />
-             </Link>
-             <div className="h-px bg-zinc-100" />
-             <button 
-                onClick={() => {
-                    if (mode === 'room') {
-                        setMode('solo');
-                    } else {
-                        setMode('room');
-                        setShowRoomModal(true);
-                    }
-                }}
-                className={`p-2.5 rounded-lg transition-colors ${mode === 'room' ? 'bg-indigo-100 text-indigo-600' : 'text-zinc-500 hover:bg-zinc-100'}`}
-                title="Room Mode"
-             >
-                 <Users size={20} />
-             </button>
+          <Link to="/" className="p-2.5 text-zinc-500 hover:bg-zinc-100 rounded-lg block text-center" title="Back to Home">
+            <Home size={20} />
+          </Link>
+          <div className="h-px bg-zinc-100" />
+          <button
+            onClick={() => {
+              if (mode === 'room') {
+                setMode('solo');
+              } else {
+                setMode('room');
+                setShowRoomModal(true);
+              }
+            }}
+            className={`p-2.5 rounded-lg transition-colors ${mode === 'room' ? 'bg-indigo-100 text-indigo-600' : 'text-zinc-500 hover:bg-zinc-100'}`}
+            title="Room Mode"
+          >
+            <Users size={20} />
+          </button>
         </motion.div>
 
         {/* Room Info Bubble */}
         {mode === 'room' && isConnected && currentRoomId && (
-             <motion.div 
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                className="bg-green-50 p-3 rounded-xl border border-green-200 shadow-sm max-w-[200px]"
-             >
-                 <div className="text-[10px] font-bold text-green-600 mb-1 uppercase tracking-wider">Active Room</div>
-                 <div className="flex items-center gap-2 mb-2">
-                    <code className="text-sm font-bold text-zinc-700">{currentRoomId}</code>
-                    <button 
-                        onClick={() => { navigator.clipboard.writeText(currentRoomId); setCopySuccess(true); setTimeout(() => setCopySuccess(false), 2000); }}
-                        className="text-green-600 hover:bg-green-100 p-1 rounded"
-                    >
-                        {copySuccess ? <Check size={14}/> : <Copy size={14}/>}
-                    </button>
-                 </div>
-                 <div className="text-[10px] font-bold text-green-600 mb-1 uppercase tracking-wider">Users ({roomUsers.length})</div>
-                 <div className="space-y-1 mb-3">
-                   {roomUsers.map((roomUser) => (
-                     <div key={roomUser.socketId} className="flex items-center gap-1.5">
-                       <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                       <span className="text-xs text-zinc-700 truncate">{roomUser.name}</span>
-                     </div>
-                   ))}
-                 </div>
-                 
-                 {/* Leave Room Button */}
-                 <button
-                   onClick={handleLeaveRoom}
-                   className="w-full py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
-                 >
-                   <LogOut size={14} />
-                   Leave Room
-                 </button>
-             </motion.div>
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-green-50 p-3 rounded-xl border border-green-200 shadow-sm max-w-[200px]"
+          >
+            <div className="text-[10px] font-bold text-green-600 mb-1 uppercase tracking-wider">Active Room</div>
+            <div className="flex items-center gap-2 mb-2">
+              <code className="text-sm font-bold text-zinc-700">{currentRoomId}</code>
+              <button
+                onClick={() => { navigator.clipboard.writeText(currentRoomId); setCopySuccess(true); setTimeout(() => setCopySuccess(false), 2000); }}
+                className="text-green-600 hover:bg-green-100 p-1 rounded"
+              >
+                {copySuccess ? <Check size={14} /> : <Copy size={14} />}
+              </button>
+            </div>
+            <div className="text-[10px] font-bold text-green-600 mb-1 uppercase tracking-wider">Users ({roomUsers.length})</div>
+            <div className="space-y-1 mb-3">
+              {roomUsers.map((roomUser) => (
+                <div key={roomUser.socketId} className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  <span className="text-xs text-zinc-700 truncate">{roomUser.name}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Leave Room Button */}
+            <button
+              onClick={handleLeaveRoom}
+              className="w-full py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
+            >
+              <LogOut size={14} />
+              Leave Room
+            </button>
+          </motion.div>
         )}
 
         {/* PROPERTIES PANEL */}
         <AnimatePresence>
-            {showProperties && (
-                <motion.div 
-                    initial={{ x: -50, opacity: 0, height: 0 }}
-                    animate={{ x: 0, opacity: 1, height: 'auto' }}
-                    exit={{ x: -50, opacity: 0, height: 0 }}
-                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                    className="bg-white p-4 rounded-xl shadow-lg border border-zinc-200 overflow-hidden origin-top-left"
-                >
-                    <div className="flex flex-col gap-4 min-w-[120px]">
-                        {/* Stroke Color */}
-                        <div>
-                            <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-2 block">Stroke</label>
-                            <div className="grid grid-cols-4 gap-2">
-                                {['#000000', '#e03131', '#2f9e44', '#1971c2'].map(c => (
-                                    <button 
-                                        key={c}
-                                        onClick={() => setColor(c)}
-                                        className={`w-6 h-6 rounded-md transition-transform active:scale-95 ${color === c ? 'ring-2 ring-offset-2 ring-zinc-900 scale-110' : ''}`}
-                                        style={{ backgroundColor: c }}
-                                    />
-                                ))}
-                            </div>
-                        </div>
+          {showProperties && (
+            <motion.div
+              initial={{ x: -50, opacity: 0, height: 0 }}
+              animate={{ x: 0, opacity: 1, height: 'auto' }}
+              exit={{ x: -50, opacity: 0, height: 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className="bg-white p-4 rounded-xl shadow-lg border border-zinc-200 overflow-hidden origin-top-left"
+            >
+              <div className="flex flex-col gap-4 min-w-[120px]">
+                {/* Stroke Color */}
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-2 block">Stroke</label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {['#000000', '#e03131', '#2f9e44', '#1971c2'].map(c => (
+                      <button
+                        key={c}
+                        onClick={() => setColor(c)}
+                        className={`w-6 h-6 rounded-md transition-transform active:scale-95 ${color === c ? 'ring-2 ring-offset-2 ring-zinc-900 scale-110' : ''}`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </div>
+                </div>
 
-                        {/* Fill Color */}
-                        <div>
-                            <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-2 block">Fill</label>
-                            <div className="grid grid-cols-4 gap-2">
-                                <button 
-                                    onClick={() => setFillColor('transparent')} 
-                                    className={`w-6 h-6 rounded-md border border-zinc-200 flex items-center justify-center transition-transform active:scale-95 ${fillColor === 'transparent' ? 'ring-2 ring-offset-2 ring-zinc-900' : ''}`}
-                                >
-                                    <div className="w-full h-px bg-red-400 rotate-45" />
-                                </button>
-                                {['#ffec99', '#b2f2bb', '#a5d8ff'].map(c => (
-                                    <button 
-                                        key={c}
-                                        onClick={() => setFillColor(c)}
-                                        className={`w-6 h-6 rounded-md transition-transform active:scale-95 ${fillColor === c ? 'ring-2 ring-offset-2 ring-zinc-900 scale-110' : ''}`}
-                                        style={{ backgroundColor: c }}
-                                    />
-                                ))}
-                            </div>
-                        </div>
+                {/* Fill Color */}
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-2 block">Fill</label>
+                  <div className="grid grid-cols-4 gap-2">
+                    <button
+                      onClick={() => setFillColor('transparent')}
+                      className={`w-6 h-6 rounded-md border border-zinc-200 flex items-center justify-center transition-transform active:scale-95 ${fillColor === 'transparent' ? 'ring-2 ring-offset-2 ring-zinc-900' : ''}`}
+                    >
+                      <div className="w-full h-px bg-red-400 rotate-45" />
+                    </button>
+                    {['#ffec99', '#b2f2bb', '#a5d8ff'].map(c => (
+                      <button
+                        key={c}
+                        onClick={() => setFillColor(c)}
+                        className={`w-6 h-6 rounded-md transition-transform active:scale-95 ${fillColor === c ? 'ring-2 ring-offset-2 ring-zinc-900 scale-110' : ''}`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </div>
+                </div>
 
-                        {/* Stroke Width */}
-                        <div>
-                            <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-2 block">Thickness</label>
-                            <div className="flex gap-2 bg-zinc-100 p-1 rounded-lg">
-                                {[2, 4, 6, 8].map(s => (
-                                    <button
-                                        key={s}
-                                        onClick={() => setStrokeWidth(s)}
-                                        className={`flex-1 h-8 rounded flex items-center justify-center transition-all ${strokeWidth === s ? 'bg-white shadow-sm' : 'hover:bg-zinc-200'}`}
-                                    >
-                                        <div className="bg-zinc-800 rounded-full" style={{ width: s, height: s }} />
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                </motion.div>
-            )}
+                {/* Stroke Width */}
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-2 block">Thickness</label>
+                  <div className="flex gap-2 bg-zinc-100 p-1 rounded-lg">
+                    {[2, 4, 6, 8].map(s => (
+                      <button
+                        key={s}
+                        onClick={() => setStrokeWidth(s)}
+                        className={`flex-1 h-8 rounded flex items-center justify-center transition-all ${strokeWidth === s ? 'bg-white shadow-sm' : 'hover:bg-zinc-200'}`}
+                      >
+                        <div className="bg-zinc-800 rounded-full" style={{ width: s, height: s }} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
         </AnimatePresence>
       </div>
 
@@ -993,77 +1048,77 @@ if (tool === 'eraser' && opt.target) {
 
       {/* --- BOTTOM: ZOOM & UTILS --- */}
       <div className="absolute bottom-4 left-4 flex gap-3 z-40">
-         <div className="bg-white p-1 rounded-lg shadow-sm border border-zinc-200 flex text-zinc-600">
-             <button className="p-2 hover:bg-zinc-50 rounded" onClick={() => handleZoom('out')}><ZoomOut size={16} /></button>
-             <button 
-                onClick={() => handleZoom('reset')} 
-                className="px-2 text-xs font-bold min-w-[3rem] hover:bg-zinc-50"
-             >
-                {zoomLevel}%
-             </button>
-             <button className="p-2 hover:bg-zinc-50 rounded" onClick={() => handleZoom('in')}><ZoomIn size={16} /></button>
-         </div>
-         
-         <div className="bg-white p-1 rounded-lg shadow-sm border border-zinc-200 flex text-zinc-600">
-             <button 
-                className="p-2 hover:bg-zinc-50 rounded disabled:opacity-30 disabled:cursor-not-allowed" 
-                onClick={handleUndo} 
-                disabled={historyStep <= 0}
-             >
-                 <Undo size={16} />
-             </button>
-             <button 
-                className="p-2 hover:bg-zinc-50 rounded disabled:opacity-30 disabled:cursor-not-allowed" 
-                onClick={handleRedo} 
-                disabled={historyStep >= history.length - 1}
-             >
-                 <Redo size={16} />
-             </button>
-         </div>
+        <div className="bg-white p-1 rounded-lg shadow-sm border border-zinc-200 flex text-zinc-600">
+          <button className="p-2 hover:bg-zinc-50 rounded" onClick={() => handleZoom('out')}><ZoomOut size={16} /></button>
+          <button
+            onClick={() => handleZoom('reset')}
+            className="px-2 text-xs font-bold min-w-[3rem] hover:bg-zinc-50"
+          >
+            {zoomLevel}%
+          </button>
+          <button className="p-2 hover:bg-zinc-50 rounded" onClick={() => handleZoom('in')}><ZoomIn size={16} /></button>
+        </div>
+
+        <div className="bg-white p-1 rounded-lg shadow-sm border border-zinc-200 flex text-zinc-600">
+          <button
+            className="p-2 hover:bg-zinc-50 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+            onClick={handleUndo}
+            disabled={historyStep <= 0}
+          >
+            <Undo size={16} />
+          </button>
+          <button
+            className="p-2 hover:bg-zinc-50 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+            onClick={handleRedo}
+            disabled={historyStep >= history.length - 1}
+          >
+            <Redo size={16} />
+          </button>
+        </div>
       </div>
 
       {/* --- ROOM MODAL --- */}
       <AnimatePresence>
         {showRoomModal && (
-            <div className="absolute inset-0 z-[60] bg-black/20 backdrop-blur-sm flex items-center justify-center">
-                <motion.div 
-                    initial={{ scale: 0.95, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.95, opacity: 0 }}
-                    className="bg-white p-6 rounded-2xl shadow-xl w-96 border border-zinc-200"
+          <div className="absolute inset-0 z-[60] bg-black/20 backdrop-blur-sm flex items-center justify-center">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white p-6 rounded-2xl shadow-xl w-96 border border-zinc-200"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-bold text-zinc-800">Collaboration</h2>
+                <button onClick={() => { setShowRoomModal(false); if (!currentRoomId) setMode('solo'); }} className="p-1 hover:bg-zinc-100 rounded-full"><LogOut size={16} /></button>
+              </div>
+
+              <div className="space-y-4">
+                <button
+                  onClick={handleCreateRoom}
+                  disabled={isCreatingRoom}
+                  className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50"
                 >
-                    <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-xl font-bold text-zinc-800">Collaboration</h2>
-                        <button onClick={() => { setShowRoomModal(false); if(!currentRoomId) setMode('solo'); }} className="p-1 hover:bg-zinc-100 rounded-full"><LogOut size={16} /></button>
-                    </div>
+                  {isCreatingRoom ? 'Creating Room...' : 'Start New Room'}
+                </button>
 
-                    <div className="space-y-4">
-                        <button 
-                            onClick={handleCreateRoom}
-                            disabled={isCreatingRoom}
-                            className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-50"
-                        >
-                            {isCreatingRoom ? 'Creating Room...' : 'Start New Room'}
-                        </button>
-                        
-                        <div className="relative text-center my-2">
-                            <span className="bg-white px-2 text-xs text-zinc-400 font-bold relative z-10">OR JOIN</span>
-                            <div className="absolute top-1/2 w-full h-px bg-zinc-100 left-0 -z-0"></div>
-                        </div>
+                <div className="relative text-center my-2">
+                  <span className="bg-white px-2 text-xs text-zinc-400 font-bold relative z-10">OR JOIN</span>
+                  <div className="absolute top-1/2 w-full h-px bg-zinc-100 left-0 -z-0"></div>
+                </div>
 
-                        <div className="flex gap-2">
-                            <input 
-                                type="text" 
-                                placeholder="Enter Room ID" 
-                                value={roomId}
-                                onChange={(e) => setRoomId(e.target.value.toUpperCase())}
-                                className="flex-1 px-4 py-2 border-2 border-zinc-100 rounded-xl font-mono uppercase focus:border-indigo-500 outline-none"
-                            />
-                            <button onClick={handleJoinRoom} className="px-4 bg-zinc-100 hover:bg-zinc-200 rounded-xl font-bold text-zinc-700">Join</button>
-                        </div>
-                    </div>
-                </motion.div>
-            </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Enter Room ID"
+                    value={roomId}
+                    onChange={(e) => setRoomId(e.target.value.toUpperCase())}
+                    className="flex-1 px-4 py-2 border-2 border-zinc-100 rounded-xl font-mono uppercase focus:border-indigo-500 outline-none"
+                  />
+                  <button onClick={handleJoinRoom} className="px-4 bg-zinc-100 hover:bg-zinc-200 rounded-xl font-bold text-zinc-700">Join</button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 

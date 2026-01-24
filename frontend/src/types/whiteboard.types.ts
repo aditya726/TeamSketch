@@ -6,6 +6,7 @@
  * Represents a serialized Fabric.js drawing object
  */
 export interface DrawingPayload {
+  id?: string;
   type: string;
   path?: Array<Array<string | number>>;
   left?: number;
@@ -48,6 +49,8 @@ export enum ClientEvents {
   JOIN_ROOM = 'join-room',
   LEAVE_ROOM = 'leave-room',
   DRAW = 'draw',
+  MODIFY = 'modify',
+  DELETE = 'delete',
   CLEAR_CANVAS = 'clear-canvas',
 }
 
@@ -57,6 +60,8 @@ export enum ClientEvents {
 export enum ServerEvents {
   ROOM_STATE = 'room-state',
   DRAW = 'draw',
+  MODIFY = 'modify',
+  DELETE = 'delete',
   CLEAR_CANVAS = 'clear-canvas',
   ERROR = 'error',
   USERS_UPDATE = 'users-update',

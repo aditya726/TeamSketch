@@ -51,6 +51,10 @@ const Whiteboard: React.FC = () => {
   const remoteObjectsRef = useRef<Record<string, fabric.Object>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Pen Tool tracking
+  const currentPathIdRef = useRef<string | null>(null);
+  const currentPointsRef = useRef<{ x: number; y: number }[]>([]);
+
   // History Locking (prevents loops during undo/redo)
   const isHistoryProcessing = useRef<boolean>(false);
   // Keep a ref of historyStep to avoid stale closures in saveHistory
@@ -259,8 +263,10 @@ const Whiteboard: React.FC = () => {
 
     const handlePathCreated = (e: any) => {
       if (e.path) {
-        (e.path as any).id = generateId();
+        (e.path as any).id = currentPathIdRef.current || generateId();
         handleObjectComplete(e.path);
+        currentPathIdRef.current = null;
+        currentPointsRef.current = [];
       }
     };
 
@@ -442,8 +448,18 @@ const Whiteboard: React.FC = () => {
 
       // If we already have a temporary object for this ID, update it
       if (remoteObjectsRef.current[objId]) {
-        remoteObjectsRef.current[objId].set(payload.object);
-        canvas.renderAll();
+        if (payload.object.type === 'polyline') {
+          const poly = remoteObjectsRef.current[objId] as any;
+          poly.set({ points: payload.object.points });
+          if (typeof poly._calcDimensions === 'function') {
+            poly._calcDimensions();
+          }
+          poly.setCoords();
+          canvas.renderAll();
+        } else {
+          remoteObjectsRef.current[objId].set(payload.object);
+          canvas.renderAll();
+        }
       } else {
         // Otherwise create a temporary object
         fabric.util.enlivenObjects([payload.object], (objects: fabric.Object[]) => {
@@ -631,9 +647,16 @@ const Whiteboard: React.FC = () => {
       return;
     }
 
-    // Selection and pen rely on Fabric's built-in behaviors; don't set drawing flag.
-    if (tool === 'selection' || tool === 'pen') {
+    // Selection relies on Fabric's built-in behaviors; don't set drawing flag.
+    if (tool === 'selection') {
       isDrawingRef.current = false;
+      return;
+    }
+
+    if (tool === 'pen') {
+      isDrawingRef.current = true;
+      currentPathIdRef.current = generateId();
+      currentPointsRef.current = [{ x: pointer.x, y: pointer.y }];
       return;
     }
 
@@ -734,6 +757,26 @@ const Whiteboard: React.FC = () => {
     }
 
     if (!isDrawingRef.current) return;
+
+    if (tool === 'pen') {
+      currentPointsRef.current.push({ x: pointer.x, y: pointer.y });
+      if (mode === 'room' && currentRoomId && socketRef.current && currentPathIdRef.current) {
+        socketRef.current.emit(ClientEvents.DRAW_UPDATE, {
+          roomId: currentRoomId,
+          object: {
+            id: currentPathIdRef.current,
+            type: 'polyline',
+            points: [...currentPointsRef.current],
+            fill: 'transparent',
+            stroke: color,
+            strokeWidth: strokeWidth,
+            strokeLineCap: 'round',
+            strokeLineJoin: 'round',
+          } as unknown as DrawingPayload
+        });
+      }
+      return;
+    }
 
     if (tool === 'pan') {
       const vpt = canvas.viewportTransform!;

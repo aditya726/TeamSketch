@@ -25,6 +25,7 @@ import {
   RoomUser,
   ClientEvents,
   ServerEvents,
+  CursorData,
 } from '../types/whiteboard.types';
 
 // --- Types ---
@@ -47,6 +48,7 @@ const Whiteboard: React.FC = () => {
   const isDrawingRef = useRef<boolean>(false);
   const startPointRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const activeObjectRef = useRef<fabric.Object | null>(null);
+  const remoteObjectsRef = useRef<Record<string, fabric.Object>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // History Locking (prevents loops during undo/redo)
@@ -67,6 +69,7 @@ const Whiteboard: React.FC = () => {
   const [showRoomModal, setShowRoomModal] = useState<boolean>(false);
   const [copySuccess, setCopySuccess] = useState<boolean>(false);
   const [roomUsers, setRoomUsers] = useState<RoomUser[]>([]);
+  const [cursors, setCursors] = useState<Record<string, CursorData>>({});
 
   // Tools & Properties
   const [tool, setTool] = useState<WhiteboardTool>('pen');
@@ -390,8 +393,13 @@ const Whiteboard: React.FC = () => {
       const canvas = fabricCanvasRef.current;
       if (!canvas) return;
 
-      // Lock history so incoming changes don't trigger a "local save" and mess up the undo stack
       isHistoryProcessing.current = true;
+
+      // Clean up temporary real-time object if it exists
+      if (payload.object.id && remoteObjectsRef.current[payload.object.id]) {
+        canvas.remove(remoteObjectsRef.current[payload.object.id]);
+        delete remoteObjectsRef.current[payload.object.id];
+      }
 
       fabric.util.enlivenObjects([payload.object], (objects: fabric.Object[]) => {
         objects.forEach((obj) => {
@@ -423,6 +431,32 @@ const Whiteboard: React.FC = () => {
 
         isHistoryProcessing.current = false;
       }, 'fabric');
+    });
+
+    // Receive Draw Update (Real-time)
+    socket.on(ServerEvents.DRAW_UPDATE, (payload: { object: DrawingPayload }) => {
+      const canvas = fabricCanvasRef.current;
+      if (!canvas || !payload.object || !payload.object.id) return;
+
+      const objId = payload.object.id;
+
+      // If we already have a temporary object for this ID, update it
+      if (remoteObjectsRef.current[objId]) {
+        remoteObjectsRef.current[objId].set(payload.object);
+        canvas.renderAll();
+      } else {
+        // Otherwise create a temporary object
+        fabric.util.enlivenObjects([payload.object], (objects: fabric.Object[]) => {
+          if (objects.length > 0) {
+            const newObj = objects[0];
+            // Disable interactions for remote real-time shapes
+            newObj.set({ selectable: false, evented: false });
+            remoteObjectsRef.current[objId] = newObj;
+            canvas.add(newObj);
+            canvas.renderAll();
+          }
+        }, 'fabric');
+      }
     });
 
     // Receive Room State
@@ -467,6 +501,25 @@ const Whiteboard: React.FC = () => {
     socket.on(ServerEvents.USERS_UPDATE, (payload: { users: RoomUser[] }) => {
       console.log('Users in room:', payload.users);
       setRoomUsers(payload.users);
+
+      // Clean up cursors of users who left
+      setCursors(prev => {
+        const activeIds = new Set(payload.users.map(u => u.id));
+        const newCursors = { ...prev };
+        Object.keys(newCursors).forEach(id => {
+          if (!activeIds.has(id)) delete newCursors[id];
+        });
+        return newCursors;
+      });
+    });
+
+    // Receive Cursor Move
+    socket.on(ServerEvents.CURSOR_MOVE, (payload: { cursor: CursorData }) => {
+      if (!payload.cursor || !payload.cursor.userId) return;
+      setCursors(prev => ({
+        ...prev,
+        [payload.cursor.userId]: payload.cursor
+      }));
     });
 
     // Modify Event
@@ -661,10 +714,26 @@ const Whiteboard: React.FC = () => {
 
   const handleMouseMove = (opt: any) => {
     const canvas = fabricCanvasRef.current;
-    if (!canvas || !isDrawingRef.current) return;
+    if (!canvas) return;
 
     const { e } = opt;
     const pointer = canvas.getPointer(e);
+
+    // Emit Cursor Move
+    if (mode === 'room' && currentRoomId && socketRef.current) {
+      const socketId = socketRef.current.id || `guest-${Math.random().toString(36).substr(2, 9)}`;
+      socketRef.current.emit(ClientEvents.CURSOR_MOVE, {
+        roomId: currentRoomId,
+        cursor: {
+          x: pointer.x,
+          y: pointer.y,
+          userId: user?.id || socketId,
+          userName: user?.username || user?.email?.split('@')[0] || `User-${socketId.substring(0, 4)}`
+        }
+      });
+    }
+
+    if (!isDrawingRef.current) return;
 
     if (tool === 'pan') {
       const vpt = canvas.viewportTransform!;
@@ -697,6 +766,14 @@ const Whiteboard: React.FC = () => {
     }
 
     canvas.renderAll();
+
+    // Emit Draw Update mapping active object
+    if (mode === 'room' && currentRoomId && socketRef.current && activeObjectRef.current) {
+      socketRef.current.emit(ClientEvents.DRAW_UPDATE, {
+        roomId: currentRoomId,
+        object: activeObjectRef.current.toObject(['id']) as DrawingPayload
+      });
+    }
   };
 
   const handleMouseUp = () => {
@@ -1045,6 +1122,41 @@ const Whiteboard: React.FC = () => {
 
       {/* --- CANVAS CONTAINER --- */}
       <canvas ref={canvasRef} />
+
+      {/* --- CURSORS OVERLAY --- */}
+      {mode === 'room' && Object.values(cursors).map(cursor => {
+        // Find our own socket ID to omit showing our own cursor via socket
+        const socketId = socketRef.current?.id || '';
+        const isSelf = cursor.userId === user?.id || cursor.userId === socketId;
+        if (isSelf) return null;
+
+        // Map cursor canvas coordinates to screen coordinates
+        let left = cursor.x;
+        let top = cursor.y;
+        if (fabricCanvasRef.current) {
+          const vpt = fabricCanvasRef.current.viewportTransform;
+          if (vpt) {
+            left = cursor.x * vpt[0] + vpt[4];
+            top = cursor.y * vpt[3] + vpt[5];
+          }
+        }
+
+        return (
+          <motion.div
+            key={cursor.userId}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1, x: left, y: top }}
+            transition={{ type: 'spring', stiffness: 500, damping: 28, mass: 0.5 }}
+            className="absolute z-50 pointer-events-none flex flex-col items-center"
+            style={{ left: 0, top: 0 }}
+          >
+            <MousePointer2 size={16} className="text-indigo-500 fill-indigo-500 -ml-2 -mt-2" />
+            <div className="bg-indigo-500 text-white text-[10px] px-2 py-0.5 rounded-md mt-1 whitespace-nowrap shadow-sm">
+              {cursor.userName}
+            </div>
+          </motion.div>
+        );
+      })}
 
       {/* --- BOTTOM: ZOOM & UTILS --- */}
       <div className="absolute bottom-4 left-4 flex gap-3 z-40">

@@ -199,6 +199,34 @@ function initializeWhiteboardSocket(io) {
     });
 
     /**
+     * Handle real-time draw updates
+     */
+    socket.on('draw-update', (payload) => {
+      const { roomId, object } = payload || {};
+
+      if (!roomId || typeof roomId !== 'string' || !object) {
+        return;
+      }
+
+      // Broadcast the incomplete object to the rest of the room
+      socket.to(roomId).emit('draw-update', { object });
+    });
+
+    /**
+     * Handle cursor movement
+     */
+    socket.on('cursor-move', (payload) => {
+      const { roomId, cursor } = payload || {};
+
+      if (!roomId || typeof roomId !== 'string' || !cursor) {
+        return;
+      }
+
+      // Broadcast cursor coordinates to everyone else in the room
+      socket.to(roomId).emit('cursor-move', { cursor });
+    });
+
+    /**
      * Handle object modification (move, resize, rotate)
      */
     socket.on('modify', (payload) => {

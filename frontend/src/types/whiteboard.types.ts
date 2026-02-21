@@ -35,6 +35,16 @@ export interface RoomUser {
 }
 
 /**
+ * Cursor positioning and user info
+ */
+export interface CursorData {
+  x: number;
+  y: number;
+  userId: string;
+  userName: string;
+}
+
+/**
  * Room state containing all canvas objects
  */
 export interface RoomState {
@@ -49,6 +59,8 @@ export enum ClientEvents {
   JOIN_ROOM = 'join-room',
   LEAVE_ROOM = 'leave-room',
   DRAW = 'draw',
+  DRAW_UPDATE = 'draw-update',
+  CURSOR_MOVE = 'cursor-move',
   MODIFY = 'modify',
   DELETE = 'delete',
   CLEAR_CANVAS = 'clear-canvas',
@@ -60,6 +72,8 @@ export enum ClientEvents {
 export enum ServerEvents {
   ROOM_STATE = 'room-state',
   DRAW = 'draw',
+  DRAW_UPDATE = 'draw-update',
+  CURSOR_MOVE = 'cursor-move',
   MODIFY = 'modify',
   DELETE = 'delete',
   CLEAR_CANVAS = 'clear-canvas',

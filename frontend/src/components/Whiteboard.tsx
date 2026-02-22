@@ -1173,7 +1173,10 @@ const Whiteboard: React.FC = () => {
         const isSelf = cursor.userId === user?.id || cursor.userId === socketId;
         if (isSelf) return null;
 
-        // Map cursor canvas coordinates to screen coordinates
+        // Map cursor canvas coordinates to screen coordinates.
+        // We must account for:
+        //   1. The Fabric viewport transform (zoom + pan)
+        //   2. The canvas HTML element's own page offset (getBoundingClientRect)
         let left = cursor.x;
         let top = cursor.y;
         if (fabricCanvasRef.current) {
@@ -1181,6 +1184,14 @@ const Whiteboard: React.FC = () => {
           if (vpt) {
             left = cursor.x * vpt[0] + vpt[4];
             top = cursor.y * vpt[3] + vpt[5];
+          }
+          // Add the canvas element's screen offset so the overlay (anchored at 0,0
+          // of the root div) maps correctly to the canvas drawing surface.
+          const canvasEl = fabricCanvasRef.current.getElement();
+          if (canvasEl) {
+            const rect = canvasEl.getBoundingClientRect();
+            left += rect.left;
+            top += rect.top;
           }
         }
 
@@ -1190,11 +1201,12 @@ const Whiteboard: React.FC = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1, x: left, y: top }}
             transition={{ type: 'spring', stiffness: 500, damping: 28, mass: 0.5 }}
-            className="absolute z-50 pointer-events-none flex flex-col items-center"
+            className="absolute z-50 pointer-events-none"
             style={{ left: 0, top: 0 }}
           >
-            <MousePointer2 size={16} className="text-indigo-500 fill-indigo-500 -ml-2 -mt-2" />
-            <div className="bg-indigo-500 text-white text-[10px] px-2 py-0.5 rounded-md mt-1 whitespace-nowrap shadow-sm">
+            {/* Icon tip is at exactly (left, top) — no centering offset */}
+            <MousePointer2 size={16} className="text-indigo-500 fill-indigo-500 block" />
+            <div className="bg-indigo-500 text-white text-[10px] px-2 py-0.5 rounded-md mt-0.5 ml-3 whitespace-nowrap shadow-sm inline-block">
               {cursor.userName}
             </div>
           </motion.div>

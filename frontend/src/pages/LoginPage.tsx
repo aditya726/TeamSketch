@@ -1,11 +1,15 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { PencilLine, ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { FloatingDoodles } from '../components/FloatingDoodles';
 import api from '../services/api';
 import { useAuthStore } from '../store/useAuthStore';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const login = useAuthStore((state) => state.login);
@@ -15,10 +19,10 @@ const LoginPage = () => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
-    
+
     try {
       const { data } = await api.post('/auth/login', { email, password });
-      login(data.data); 
+      login(data.data);
       navigate('/');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Login failed');
@@ -32,47 +36,92 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
-        <h2 className="text-3xl font-bold text-center text-gray-900 mb-8">Welcome Back</h2>
-        
-        {error && <div className="bg-red-50 text-red-500 p-3 rounded-lg mb-4 text-sm text-center">{error}</div>}
+    <div className="min-h-screen bg-white text-zinc-900 font-architects relative overflow-hidden flex flex-col">
+      <FloatingDoodles />
 
-        <button 
-          onClick={handleGoogleLogin}
-          className="w-full flex items-center justify-center gap-3 bg-white border border-gray-300 text-gray-700 py-3 rounded-lg hover:bg-gray-50 transition font-medium mb-6"
+      <nav className="relative z-10 p-6 flex justify-between items-center max-w-7xl mx-auto w-full">
+        <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+          <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center -rotate-3 shadow-lg">
+            <PencilLine className="text-white" size={24} />
+          </div>
+          <h1 className="text-3xl font-gloria font-bold text-indigo-600 tracking-tight">
+            TeamSketch
+          </h1>
+        </Link>
+        <Link to="/" className="flex items-center gap-2 text-zinc-500 hover:text-indigo-600 font-medium transition-colors">
+          <ArrowLeft size={18} />
+          Back to Home
+        </Link>
+      </nav>
+
+      <main className="relative z-10 flex-grow flex items-center justify-center p-4">
+        <motion.div
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          className="max-w-md w-full bg-white rounded-3xl shadow-[12px_12px_0px_0px_rgba(0,0,0,0.1)] border-4 border-zinc-900 p-8"
         >
-          <span>Continue with Google</span>
-        </button>
+          <h2 className="text-4xl font-gloria font-bold text-center text-zinc-900 mb-8">Welcome Back</h2>
 
-        <div className="relative mb-6">
-          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200"></div></div>
-          <div className="relative flex justify-center text-sm"><span className="px-2 bg-white text-gray-500">Or continue with email</span></div>
-        </div>
+          {error && (
+            <div className="bg-red-50 border-2 border-red-200 text-red-500 p-3 rounded-xl mb-4 text-sm text-center font-medium">
+              {error}
+            </div>
+          )}
 
-        <form onSubmit={handleLogin} className="space-y-4">
-          <input 
-            type="email" placeholder="Email" required
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:border-indigo-500"
-            value={email} onChange={(e) => setEmail(e.target.value)}
-          />
-          <input 
-            type="password" placeholder="Password" required
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none focus:border-indigo-500"
-            value={password} onChange={(e) => setPassword(e.target.value)}
-          />
-          <button 
-            type="submit" disabled={isLoading}
-            className="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 transition font-bold"
+          <button
+            onClick={handleGoogleLogin}
+            className="w-full flex items-center justify-center gap-3 bg-white border-2 border-zinc-200 text-zinc-700 py-3 rounded-xl hover:bg-zinc-50 hover:border-zinc-300 transition-all font-bold mb-6 active:scale-95"
           >
-            {isLoading ? 'Logging in...' : 'Log In'}
+            <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="w-5 h-5" />
+            <span>Continue with Google</span>
           </button>
-        </form>
 
-        <p className="mt-6 text-center text-sm text-gray-600">
-          Don't have an account? <Link to="/register" className="text-indigo-600 hover:underline font-medium">Sign up</Link>
-        </p>
-      </div>
+          <div className="relative mb-6">
+            <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-zinc-100"></div></div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-4 bg-white text-zinc-400 font-bold">OR</span>
+            </div>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-4">
+            <input
+              type="email" placeholder="Email" required
+              className="w-full px-4 py-3 border-2 border-zinc-200 rounded-xl outline-none focus:border-indigo-500 transition-colors font-medium text-zinc-900 placeholder-zinc-400"
+              value={email} onChange={(e) => setEmail(e.target.value)}
+            />
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"} placeholder="Password" required
+                className={`w-full px-4 py-3 border-2 border-zinc-200 rounded-xl outline-none focus:border-indigo-500 transition-colors font-medium text-zinc-900 placeholder-zinc-400 ${!showPassword && password.length > 0 ? 'font-sans tracking-widest' : ''}`}
+                value={password} onChange={(e) => setPassword(e.target.value)}
+              />
+              <button
+                type="button"
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 transition-colors"
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
+            </div>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              type="submit" disabled={isLoading}
+              className="w-full bg-indigo-600 text-white py-3 rounded-xl hover:bg-indigo-700 transition-colors font-bold shadow-lg mt-2"
+            >
+              {isLoading ? 'Logging in...' : 'Log In'}
+            </motion.button>
+          </form>
+
+          <p className="mt-8 text-center text-zinc-500 font-medium">
+            Don't have an account?{' '}
+            <Link to="/register" className="text-indigo-600 hover:text-indigo-700 font-bold relative group">
+              Sign up
+              <span className="absolute -bottom-1 left-0 w-full h-0.5 bg-indigo-600 scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></span>
+            </Link>
+          </p>
+        </motion.div>
+      </main>
     </div>
   );
 };

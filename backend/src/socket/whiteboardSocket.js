@@ -292,7 +292,78 @@ function initializeWhiteboardSocket(io) {
       console.log(`[Socket] Cleared canvas in room ${roomId}`);
     });
 
+    /**
+     * Handle Chat Messages
+     */
+    socket.on('chat-message', (payload) => {
+      const { roomId, message, userId, userName } = payload || {};
 
+      if (!roomId || !message) {
+        return;
+      }
+
+      // Broadcast chat message to everyone else in the room
+      socket.to(roomId).emit('chat-message', {
+        id: Math.random().toString(36).substring(2, 9),
+        userId,
+        userName,
+        message,
+        timestamp: new Date().toISOString()
+      });
+    });
+
+    /**
+     * Handle WebRTC Signaling: Offer
+     */
+    socket.on('webrtc-offer', (payload) => {
+      const { targetSocketId, offer, roomId, userId, userName } = payload || {};
+
+      if (!targetSocketId || !offer) {
+        return;
+      }
+
+      // Route offer to the specific target socket
+      socket.to(targetSocketId).emit('webrtc-offer', {
+        offer,
+        senderSocketId: socket.id,
+        userId,
+        userName
+      });
+    });
+
+    /**
+     * Handle WebRTC Signaling: Answer
+     */
+    socket.on('webrtc-answer', (payload) => {
+      const { targetSocketId, answer, roomId } = payload || {};
+
+      if (!targetSocketId || !answer) {
+        return;
+      }
+
+      // Route answer to the specific target socket
+      socket.to(targetSocketId).emit('webrtc-answer', {
+        answer,
+        senderSocketId: socket.id
+      });
+    });
+
+    /**
+     * Handle WebRTC Signaling: ICE Candidate
+     */
+    socket.on('webrtc-ice-candidate', (payload) => {
+      const { targetSocketId, candidate, roomId } = payload || {};
+
+      if (!targetSocketId || !candidate) {
+        return;
+      }
+
+      // Route ICE candidate to the specific target socket
+      socket.to(targetSocketId).emit('webrtc-ice-candidate', {
+        candidate,
+        senderSocketId: socket.id
+      });
+    });
 
     /**
      * Handle client disconnect

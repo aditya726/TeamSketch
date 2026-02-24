@@ -10,7 +10,7 @@ const { getRedisClient } = require('../config/redis');
  */
 const VALIDATION_CONFIG = {
   MAX_POINTS: 10000, // Maximum number of points in a path
-  ALLOWED_TYPES: ['path', 'circle', 'rect', 'line', 'text', 'image'], // Allowed object types
+  ALLOWED_TYPES: ['path', 'circle', 'rect', 'line', 'text', 'i-text', 'image'], // Allowed object types
   MAX_STROKE_WIDTH: 100, // Maximum stroke width
 };
 

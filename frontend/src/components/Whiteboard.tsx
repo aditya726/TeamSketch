@@ -28,6 +28,9 @@ import {
   CursorData,
 } from '../types/whiteboard.types';
 
+import RoomChat from './RoomChat';
+import RoomVoiceChat from './RoomVoiceChat';
+
 // --- Types ---
 export type WhiteboardTool =
   | 'selection' | 'pan' | 'rectangle' | 'diamond' | 'circle'
@@ -1289,6 +1292,23 @@ const Whiteboard: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* --- CHAT AND VOICE CHAT --- */}
+      {mode === 'room' && currentRoomId && socketRef.current && (
+        <>
+          <RoomVoiceChat
+            socket={socketRef.current}
+            roomId={currentRoomId}
+            user={user}
+            roomUsers={roomUsers}
+          />
+          <RoomChat
+            socket={socketRef.current}
+            roomId={currentRoomId}
+            user={user}
+          />
+        </>
+      )}
 
     </div>
   );

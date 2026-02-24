@@ -30,10 +30,10 @@ app.use(express.json());
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
+  res.json({
+    status: 'ok',
     service: 'whiteboard-server',
-    timestamp: new Date().toISOString() 
+    timestamp: new Date().toISOString()
   });
 });
 
@@ -47,6 +47,7 @@ const io = new Server(httpServer, {
     methods: ['GET', 'POST'],
     credentials: true,
   },
+  maxHttpBufferSize: 1e7, // 10MB to allow large image syncing
 });
 
 // Initialize whiteboard Socket.IO logic

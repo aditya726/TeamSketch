@@ -64,6 +64,10 @@ export enum ClientEvents {
   MODIFY = 'modify',
   DELETE = 'delete',
   CLEAR_CANVAS = 'clear-canvas',
+  CHAT_MESSAGE = 'chat-message',
+  WEBRTC_OFFER = 'webrtc-offer',
+  WEBRTC_ANSWER = 'webrtc-answer',
+  WEBRTC_ICE_CANDIDATE = 'webrtc-ice-candidate',
 }
 
 /**
@@ -79,6 +83,10 @@ export enum ServerEvents {
   CLEAR_CANVAS = 'clear-canvas',
   ERROR = 'error',
   USERS_UPDATE = 'users-update',
+  CHAT_MESSAGE = 'chat-message',
+  WEBRTC_OFFER = 'webrtc-offer',
+  WEBRTC_ANSWER = 'webrtc-answer',
+  WEBRTC_ICE_CANDIDATE = 'webrtc-ice-candidate',
 }
 
 /**
@@ -97,4 +105,15 @@ export type WhiteboardTool = 'pen' | 'pan';
 export interface Command {
   type: 'add' | 'clear';
   object?: DrawingPayload;
+}
+
+/**
+ * Chat Message structure
+ */
+export interface ChatMessage {
+  id: string;
+  userId: string;
+  userName: string;
+  message: string;
+  timestamp: string;
 }

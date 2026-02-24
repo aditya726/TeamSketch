@@ -35,6 +35,7 @@ export type WhiteboardTool =
 
 const STYLABLE_TOOLS = ['rectangle', 'diamond', 'circle', 'arrow', 'line', 'pen', 'text'];
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL;
+const BLACK_CROSSHAIR = `url('data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%3E%3Cline%20x1%3D%2212%22%20y1%3D%222%22%20x2%3D%2212%22%20y2%3D%2222%22%3E%3C%2Fline%3E%3Cline%20x1%3D%222%22%20y1%3D%2212%22%20x2%3D%2222%22%20y2%3D%2212%22%3E%3C%2Fline%3E%3C%2Fsvg%3E') 12 12, crosshair`;
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
@@ -316,7 +317,7 @@ const Whiteboard: React.FC = () => {
       canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
       canvas.freeDrawingBrush.color = color;
       canvas.freeDrawingBrush.width = strokeWidth;
-      canvas.defaultCursor = 'crosshair';
+      canvas.defaultCursor = BLACK_CROSSHAIR;
     } else if (tool === 'selection') {
       canvas.selection = true;
       canvas.defaultCursor = 'default';
@@ -326,7 +327,7 @@ const Whiteboard: React.FC = () => {
     } else if (tool === 'eraser') {
       canvas.defaultCursor = 'not-allowed';
     } else {
-      canvas.defaultCursor = 'crosshair';
+      canvas.defaultCursor = BLACK_CROSSHAIR;
     }
 
     // Update active object styles

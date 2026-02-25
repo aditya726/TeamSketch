@@ -1,11 +1,28 @@
 import { motion } from "framer-motion";
 import { useAuthStore } from '../store/useAuthStore';
-import { User, Mail, Calendar, ArrowLeft } from "lucide-react";
+import { User, Mail, Calendar, ArrowLeft, Users } from "lucide-react";
 import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import api from '../services/api';
 
 const UserProfile = () => {
+  const [stats, setStats] = useState<{ totalUsers: number, sampleUsers: any[] }>({ totalUsers: 0, sampleUsers: [] });
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const response = await api.get('/auth/stats');
+        if (response.data.success) {
+          setStats(response.data.data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch stats:', error);
+      }
+    };
+    fetchStats();
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -30,8 +47,8 @@ const UserProfile = () => {
             TeamSketch
           </h1>
         </Link>
-        
-        <Link 
+
+        <Link
           to="/"
           className="flex items-center gap-2 text-zinc-600 hover:text-indigo-600 transition-colors font-medium"
         >
@@ -125,7 +142,7 @@ const UserProfile = () => {
               >
                 Start Sketching
               </Link>
-              
+
               <button
                 onClick={handleLogout}
                 className="w-full bg-zinc-100 text-zinc-900 py-4 rounded-xl font-bold hover:bg-zinc-200 transition-all border-2 border-zinc-300 active:scale-95"
@@ -154,6 +171,43 @@ const UserProfile = () => {
           <div className="bg-white rounded-xl border-2 border-zinc-900 p-6 text-center shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)]">
             <p className="text-3xl font-gloria font-bold text-green-600">0</p>
             <p className="text-sm text-zinc-600 font-medium mt-1">Hours</p>
+          </div>
+        </motion.div>
+
+        {/* Global Community Stats */}
+        <motion.div
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.8 }}
+          className="mt-8 bg-zinc-50 rounded-xl border-2 border-zinc-200 p-6 flex flex-col sm:flex-row items-center justify-between shadow-sm"
+        >
+          <div>
+            <h3 className="text-lg font-bold text-zinc-900 mb-1 flex items-center gap-2">
+              <Users size={20} className="text-indigo-600" />
+              TeamSketch Community
+            </h3>
+            <p className="text-zinc-500 text-sm">Joined by {stats.totalUsers > 0 ? stats.totalUsers : '...'} registered users</p>
+          </div>
+
+          <div className="flex items-center gap-4 mt-4 sm:mt-0">
+            <div className="flex -space-x-3">
+              {stats.sampleUsers.length > 0 ? (
+                stats.sampleUsers.map((u, i) => (
+                  <div
+                    key={u._id || i}
+                    className={`w-10 h-10 rounded-full border-2 border-zinc-50 flex items-center justify-center overflow-hidden text-sm font-bold shadow-sm ${['bg-indigo-500 text-white', 'bg-rose-500 text-white', 'bg-emerald-500 text-white', 'bg-amber-500 text-white', 'bg-purple-500 text-white'][i % 5]
+                      }`}
+                    title={u.username}
+                  >
+                    {u.username.substring(0, 2).toUpperCase()}
+                  </div>
+                ))
+              ) : (
+                [1, 2, 3, 4].map((i) => (
+                  <div key={i} className="w-10 h-10 rounded-full border-2 border-zinc-50 bg-zinc-200 animate-pulse flex items-center justify-center overflow-hidden" />
+                ))
+              )}
+            </div>
           </div>
         </motion.div>
       </main>

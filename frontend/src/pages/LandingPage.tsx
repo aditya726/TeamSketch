@@ -3,10 +3,27 @@ import { motion } from "framer-motion";
 import { FloatingDoodles } from "../components/FloatingDoodles";
 import { PencilLine, Sparkles, Zap, Users, User, LogOut } from "lucide-react";
 import { useAuthStore } from '../store/useAuthStore';
+import { useState, useEffect } from 'react';
+import api from '../services/api';
 
 const LandingPage = () => {
+  const [stats, setStats] = useState<{ totalUsers: number, sampleUsers: any[] }>({ totalUsers: 0, sampleUsers: [] });
   const { isAuthenticated, user, logout } = useAuthStore();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const response = await api.get('/auth/stats');
+        if (response.data.success) {
+          setStats(response.data.data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch stats:', error);
+      }
+    };
+    fetchStats();
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -18,7 +35,7 @@ const LandingPage = () => {
       <FloatingDoodles />
 
       <nav className="relative z-10 p-6 flex justify-between items-center max-w-7xl mx-auto w-full">
-        <motion.div 
+        <motion.div
           initial={{ x: -20, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           className="flex items-center gap-2"
@@ -30,22 +47,22 @@ const LandingPage = () => {
             TeamSketch
           </h1>
         </motion.div>
-        
-        <motion.div 
+
+        <motion.div
           initial={{ x: 20, opacity: 0 }}
           animate={{ x: 0, opacity: 1 }}
           className="space-x-6 flex items-center"
         >
           {isAuthenticated ? (
             <>
-              <Link 
-                to="/profile" 
+              <Link
+                to="/profile"
                 className="flex items-center gap-2 hover:text-indigo-600 transition-colors font-medium"
               >
                 <User size={20} />
                 <span>{user?.username}</span>
               </Link>
-              <button 
+              <button
                 onClick={handleLogout}
                 className="bg-zinc-900 text-white px-6 py-2 rounded-full font-bold hover:bg-zinc-800 transition-all shadow-md hover:shadow-lg active:scale-95 flex items-center gap-2"
               >
@@ -58,8 +75,8 @@ const LandingPage = () => {
               <Link to="/login" className="hover:text-indigo-600 transition-colors font-medium">
                 Log In
               </Link>
-              <Link 
-                to="/register" 
+              <Link
+                to="/register"
                 className="bg-indigo-600 text-white px-6 py-2 rounded-full font-bold hover:bg-indigo-700 transition-all shadow-md hover:shadow-lg active:scale-95"
               >
                 Sign Up
@@ -81,7 +98,7 @@ const LandingPage = () => {
             <span>The new way to brainstorm together</span>
           </motion.div>
 
-          <motion.h2 
+          <motion.h2
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: 0.3 }}
@@ -96,24 +113,24 @@ const LandingPage = () => {
             Sync instantly.
           </motion.h2>
 
-          <motion.p 
+          <motion.p
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: 0.4 }}
             className="text-xl md:text-2xl text-zinc-600 max-w-2xl mx-auto mb-12 leading-relaxed"
           >
-            The secure, hand-drawn whiteboard for high-performance teams. 
+            The secure, hand-drawn whiteboard for high-performance teams.
             Real-time, low-latency, and built for creativity.
           </motion.p>
 
-          <motion.div 
+          <motion.div
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: 0.5 }}
             className="flex flex-col sm:flex-row gap-6 justify-center items-center"
           >
-            <Link 
-              to="/whiteboard" 
+            <Link
+              to="/whiteboard"
               className="group relative px-10 py-5 bg-zinc-900 text-white rounded-2xl font-bold text-xl hover:bg-zinc-800 transition-all shadow-xl hover:shadow-2xl active:scale-95"
             >
               <span className="relative z-10 flex items-center gap-2">
@@ -122,27 +139,34 @@ const LandingPage = () => {
               </span>
               <div className="absolute inset-0 bg-indigo-600 rounded-2xl -rotate-2 -z-10 group-hover:rotate-0 transition-transform" />
             </Link>
-            
+
             <div className="flex items-center gap-4 text-zinc-500 font-medium">
               <div className="flex -space-x-3">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="w-10 h-10 rounded-full border-2 border-white bg-zinc-100 flex items-center justify-center overflow-hidden">
-                    <img 
-                      src={`https://images.unsplash.com/photo-${1535713875002 + i}-d1d4451d6744?w=100&h=100&fit=crop`} 
-                      alt="user"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                ))}
+                {stats.sampleUsers.length > 0 ? (
+                  stats.sampleUsers.map((u, i) => (
+                    <div
+                      key={u._id || i}
+                      className={`w-10 h-10 rounded-full border-2 border-white flex items-center justify-center overflow-hidden text-sm font-bold shadow-sm ${['bg-indigo-500 text-white', 'bg-rose-500 text-white', 'bg-emerald-500 text-white', 'bg-amber-500 text-white', 'bg-purple-500 text-white'][i % 5]
+                        }`}
+                      title={u.username}
+                    >
+                      {u.username.substring(0, 2).toUpperCase()}
+                    </div>
+                  ))
+                ) : (
+                  [1, 2, 3, 4].map((i) => (
+                    <div key={i} className="w-10 h-10 rounded-full border-2 border-white bg-zinc-200 animate-pulse flex items-center justify-center overflow-hidden" />
+                  ))
+                )}
               </div>
               <span className="flex items-center gap-1">
                 <Users size={18} />
-                Joined by 1,000+ teams
+                Joined by {stats.totalUsers > 0 ? stats.totalUsers : '...'} users
               </span>
             </div>
           </motion.div>
         </div>
-        
+
         {/* Simple visual indicator of a whiteboard */}
         <motion.div
           initial={{ y: 100, opacity: 0 }}
@@ -160,9 +184,9 @@ const LandingPage = () => {
             <div className="ml-4 h-6 w-32 bg-zinc-200 rounded-md" />
           </div>
           <div className="p-8 grid grid-cols-3 gap-8 opacity-20">
-             <div className="h-32 border-2 border-dashed border-zinc-400 rounded-xl" />
-             <div className="h-32 border-2 border-dashed border-zinc-400 rounded-xl" />
-             <div className="h-32 border-2 border-dashed border-zinc-400 rounded-xl" />
+            <div className="h-32 border-2 border-dashed border-zinc-400 rounded-xl" />
+            <div className="h-32 border-2 border-dashed border-zinc-400 rounded-xl" />
+            <div className="h-32 border-2 border-dashed border-zinc-400 rounded-xl" />
           </div>
         </motion.div>
       </main>

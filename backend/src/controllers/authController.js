@@ -338,10 +338,47 @@ const googleAuthCallback = async (req, res) => {
   }
 };
 
+/**
+ * @swagger
+ * /api/auth/stats:
+ *   get:
+ *     summary: Get overall user statistics
+ *     tags: [Auth]
+ *     responses:
+ *       200:
+ *         description: User statistics retrieved successfully
+ */
+const getStats = async (req, res) => {
+  try {
+    const totalUsers = await User.countDocuments();
+
+    // Get 4 random users
+    const sampleUsers = await User.aggregate([
+      { $sample: { size: 4 } },
+      { $project: { username: 1, _id: 1 } }
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        totalUsers,
+        sampleUsers
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   register,
   login,
   getMe,
   googleAuth,
-  googleAuthCallback
+  googleAuthCallback,
+  getStats
 };

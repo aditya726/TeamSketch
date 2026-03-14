@@ -70,6 +70,8 @@ const Whiteboard: React.FC = () => {
 
   // Modes & Connectivity
   const [mode, setMode] = useState<WhiteboardMode>('solo');
+  const modeRef = useRef<WhiteboardMode>('solo');
+  useEffect(() => { modeRef.current = mode; }, [mode]);
   const [roomId, setRoomId] = useState<string>('');
   const [currentRoomId, setCurrentRoomId] = useState<string>('');
   const [isConnected, setIsConnected] = useState<boolean>(false);
@@ -103,6 +105,10 @@ const Whiteboard: React.FC = () => {
 
     const json = JSON.stringify(fabricCanvasRef.current.toJSON());
     const MAX_HISTORY = 50;
+
+    if (modeRef.current === 'solo') {
+      localStorage.setItem('teamsketch-solo-drawing', json);
+    }
 
     setHistory(prev => {
       // Use historyStepRef to avoid stale closure issues
@@ -226,10 +232,23 @@ const Whiteboard: React.FC = () => {
 
     fabricCanvasRef.current = canvas;
 
-    // Initialize blank history state
-    const initialJson = JSON.stringify(canvas.toJSON());
-    setHistory([initialJson]);
-    setHistoryStep(0);
+    const savedMode = localStorage.getItem('teamsketch-mode');
+    const savedSoloDrawing = localStorage.getItem('teamsketch-solo-drawing');
+
+    if (savedMode !== 'room' && savedSoloDrawing) {
+      canvas.loadFromJSON(savedSoloDrawing, () => {
+        canvas.renderAll();
+        // Initialize blank history state after load
+        const initialJson = JSON.stringify(canvas.toJSON());
+        setHistory([initialJson]);
+        setHistoryStep(0);
+      });
+    } else {
+      // Initialize blank history state
+      const initialJson = JSON.stringify(canvas.toJSON());
+      setHistory([initialJson]);
+      setHistoryStep(0);
+    }
 
     // Handle Window Resize
     const handleResize = () => {
@@ -938,6 +957,8 @@ const Whiteboard: React.FC = () => {
 
     if (mode === 'room' && currentRoomId && socketRef.current) {
       socketRef.current.emit(ClientEvents.CLEAR_CANVAS, { roomId: currentRoomId });
+    } else if (mode === 'solo') {
+      localStorage.removeItem('teamsketch-solo-drawing');
     }
   };
 

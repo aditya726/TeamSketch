@@ -293,6 +293,36 @@ function initializeWhiteboardSocket(io) {
     });
 
     /**
+     * Handle Undo events
+     */
+    socket.on('undo', (payload) => {
+      const { roomId, state } = payload || {};
+      if (!roomId || typeof roomId !== 'string' || !state) return;
+
+      const roomState = getRoomState(roomId);
+      roomState.objects = state.objects || [];
+
+      // Broadcast undo
+      socket.to(roomId).emit('undo', { state });
+      console.log(`[Socket] Undo in room ${roomId}`);
+    });
+
+    /**
+     * Handle Redo events
+     */
+    socket.on('redo', (payload) => {
+      const { roomId, state } = payload || {};
+      if (!roomId || typeof roomId !== 'string' || !state) return;
+
+      const roomState = getRoomState(roomId);
+      roomState.objects = state.objects || [];
+
+      // Broadcast redo
+      socket.to(roomId).emit('redo', { state });
+      console.log(`[Socket] Redo in room ${roomId}`);
+    });
+
+    /**
      * Handle Chat Messages
      */
     socket.on('chat-message', (payload) => {

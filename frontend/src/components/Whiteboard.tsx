@@ -134,7 +134,7 @@ const Whiteboard: React.FC = () => {
   }, []);
 
   // Execute Undo
-  const handleUndo = () => {
+  const handleUndo = useCallback(() => {
     const canvas = fabricCanvasRef.current;
     if (!canvas || historyStep <= 0) return; // Need at least initial state + 1 action
 
@@ -147,13 +147,17 @@ const Whiteboard: React.FC = () => {
       setHistoryStep(previousIndex);
       isHistoryProcessing.current = false;
 
-      // Optional: In a real app, you might emit a specific 'UNDO' event to socket here
-      // For now, this is local visual undo
+      if (mode === 'room' && currentRoomId && socketRef.current) {
+        socketRef.current.emit(ClientEvents.UNDO, {
+          roomId: currentRoomId,
+          state: JSON.parse(previousState)
+        });
+      }
     });
-  };
+  }, [history, historyStep, mode, currentRoomId]);
 
   // Execute Redo
-  const handleRedo = () => {
+  const handleRedo = useCallback(() => {
     const canvas = fabricCanvasRef.current;
     if (!canvas || historyStep >= history.length - 1) return;
 
@@ -165,8 +169,74 @@ const Whiteboard: React.FC = () => {
       canvas.renderAll();
       setHistoryStep(nextIndex);
       isHistoryProcessing.current = false;
+
+      if (mode === 'room' && currentRoomId && socketRef.current) {
+        socketRef.current.emit(ClientEvents.REDO, {
+          roomId: currentRoomId,
+          state: JSON.parse(nextState)
+        });
+      }
     });
-  };
+  }, [history, historyStep, mode, currentRoomId]);
+
+  // --- Keyboard Shortcuts ---
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't intercept if user is typing in an HTML input
+      const activeElement = document.activeElement;
+      const isInput = activeElement?.tagName === 'INPUT' || activeElement?.tagName === 'TEXTAREA';
+      
+      const canvas = fabricCanvasRef.current;
+      const activeObj = canvas?.getActiveObject();
+      const isEditingText = activeObj && activeObj.type === 'i-text' && (activeObj as fabric.IText).isEditing;
+
+      if (isInput || isEditingText) return;
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+      } else if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) {
+        e.preventDefault();
+        handleRedo();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        if (canvas) {
+          canvas.discardActiveObject();
+          const objs = canvas.getObjects().filter(obj => obj.evented !== false && obj.selectable !== false);
+          if (objs.length > 0) {
+            const sel = new fabric.ActiveSelection(objs, { canvas });
+            canvas.setActiveObject(sel);
+            canvas.requestRenderAll();
+          }
+        }
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (canvas) {
+          const activeObjects = canvas.getActiveObjects();
+          if (activeObjects.length > 0) {
+            e.preventDefault();
+            isHistoryProcessing.current = true;
+            let dirty = false;
+            activeObjects.forEach(obj => {
+              canvas.remove(obj);
+              dirty = true;
+              if (mode === 'room' && currentRoomId && socketRef.current) {
+                socketRef.current.emit(ClientEvents.DELETE, { roomId: currentRoomId, objectId: (obj as any).id });
+              }
+            });
+            if (dirty) {
+              canvas.discardActiveObject();
+              canvas.requestRenderAll();
+              saveHistory();
+            }
+            isHistoryProcessing.current = false;
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleUndo, handleRedo, mode, currentRoomId, saveHistory]);
 
   // --- 2. Zoom Management ---
 
@@ -599,6 +669,36 @@ const Whiteboard: React.FC = () => {
         saveHistory();
         isHistoryProcessing.current = false;
       }
+    });
+
+    // Undo Event
+    socket.on(ServerEvents.UNDO, (payload: { state: any }) => {
+      const canvas = fabricCanvasRef.current;
+      if (!canvas || !payload.state) return;
+
+      isHistoryProcessing.current = true;
+      canvas.loadFromJSON(payload.state, () => {
+        canvas.renderAll();
+        const json = JSON.stringify(canvas.toJSON());
+        setHistory([json]);
+        setHistoryStep(0);
+        isHistoryProcessing.current = false;
+      });
+    });
+
+    // Redo Event
+    socket.on(ServerEvents.REDO, (payload: { state: any }) => {
+      const canvas = fabricCanvasRef.current;
+      if (!canvas || !payload.state) return;
+
+      isHistoryProcessing.current = true;
+      canvas.loadFromJSON(payload.state, () => {
+        canvas.renderAll();
+        const json = JSON.stringify(canvas.toJSON());
+        setHistory([json]);
+        setHistoryStep(0);
+        isHistoryProcessing.current = false;
+      });
     });
 
     return () => {
@@ -1045,8 +1145,6 @@ const Whiteboard: React.FC = () => {
           <input type="file" ref={fileInputRef} onChange={handleImageUpload} hidden accept="image/*" />
 
           <ToolBtn active={tool === 'eraser'} onClick={() => setTool('eraser')} icon={Eraser} label="Eraser" />
-          <div className="w-px h-6 bg-zinc-200 mx-1" />
-
           <button onClick={handleClear} className="p-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-colors" title="Clear Canvas">
             <Trash2 size={20} />
           </button>

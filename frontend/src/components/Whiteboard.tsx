@@ -92,10 +92,12 @@ const Whiteboard: React.FC = () => {
   const [history, setHistory] = useState<string[]>([]);
   const [historyStep, setHistoryStep] = useState<number>(-1);
   const [zoomLevel, setZoomLevel] = useState(100);
+  const historyRef = useRef<string[]>([]);
   const MAX_HISTORY = 50;
 
 
   useEffect(() => { historyStepRef.current = historyStep; }, [historyStep]);
+  useEffect(() => { historyRef.current = history; }, [history]);
 
   // --- 1. History (Undo/Redo) Management ---
 
@@ -110,37 +112,34 @@ const Whiteboard: React.FC = () => {
       localStorage.setItem('teamsketch-solo-drawing', json);
     }
 
-    setHistory(prev => {
-      // Use historyStepRef to avoid stale closure issues
-      const curStep = Math.max(0, historyStepRef.current);
-      const newHistory = prev.slice(0, curStep + 1);
-      newHistory.push(json);
+    // Mutate refs synchronously to prevent React Strict Mode double-invocation bugs
+    const curStep = Math.max(0, historyStepRef.current);
+    const newHistory = historyRef.current.slice(0, curStep + 1);
+    newHistory.push(json);
 
-      // Cap history size
-      if (newHistory.length > MAX_HISTORY) {
-        const removed = newHistory.length - MAX_HISTORY;
-        newHistory.splice(0, removed);
-        const newStep = curStep + 1 - removed;
-        setHistoryStep(newStep);
-        historyStepRef.current = newStep;
-      } else {
-        const newStep = curStep + 1;
-        setHistoryStep(newStep);
-        historyStepRef.current = newStep;
-      }
+    if (newHistory.length > MAX_HISTORY) {
+      const removed = newHistory.length - MAX_HISTORY;
+      newHistory.splice(0, removed);
+      historyStepRef.current = curStep + 1 - removed;
+    } else {
+      historyStepRef.current = curStep + 1;
+    }
 
-      return newHistory;
-    });
+    historyRef.current = newHistory;
+
+    // Sync UI state
+    setHistoryStep(historyStepRef.current);
+    setHistory([...newHistory]);
   }, []);
 
   // Execute Undo
   const handleUndo = useCallback(() => {
     const canvas = fabricCanvasRef.current;
-    if (!canvas || historyStep <= 0) return; // Need at least initial state + 1 action
+    if (!canvas || historyStepRef.current <= 0) return;
 
     isHistoryProcessing.current = true;
-    const previousIndex = historyStep - 1;
-    const previousState = history[previousIndex];
+    const previousIndex = historyStepRef.current - 1;
+    const previousState = historyRef.current[previousIndex];
 
     canvas.loadFromJSON(previousState, () => {
       canvas.renderAll();
@@ -154,16 +153,16 @@ const Whiteboard: React.FC = () => {
         });
       }
     });
-  }, [history, historyStep, mode, currentRoomId]);
+  }, [mode, currentRoomId]);
 
   // Execute Redo
   const handleRedo = useCallback(() => {
     const canvas = fabricCanvasRef.current;
-    if (!canvas || historyStep >= history.length - 1) return;
+    if (!canvas || historyStepRef.current >= historyRef.current.length - 1) return;
 
     isHistoryProcessing.current = true;
-    const nextIndex = historyStep + 1;
-    const nextState = history[nextIndex];
+    const nextIndex = historyStepRef.current + 1;
+    const nextState = historyRef.current[nextIndex];
 
     canvas.loadFromJSON(nextState, () => {
       canvas.renderAll();
@@ -177,7 +176,7 @@ const Whiteboard: React.FC = () => {
         });
       }
     });
-  }, [history, historyStep, mode, currentRoomId]);
+  }, [mode, currentRoomId]);
 
   // --- Keyboard Shortcuts ---
   useEffect(() => {

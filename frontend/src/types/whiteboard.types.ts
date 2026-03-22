@@ -68,6 +68,8 @@ export enum ClientEvents {
   WEBRTC_OFFER = 'webrtc-offer',
   WEBRTC_ANSWER = 'webrtc-answer',
   WEBRTC_ICE_CANDIDATE = 'webrtc-ice-candidate',
+  UNDO = 'undo',
+  REDO = 'redo',
 }
 
 /**
@@ -87,6 +89,8 @@ export enum ServerEvents {
   WEBRTC_OFFER = 'webrtc-offer',
   WEBRTC_ANSWER = 'webrtc-answer',
   WEBRTC_ICE_CANDIDATE = 'webrtc-ice-candidate',
+  UNDO = 'undo',
+  REDO = 'redo',
 }
 
 /**

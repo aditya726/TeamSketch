@@ -31,7 +31,8 @@ const RegisterPage = () => {
   };
 
   const handleGoogleLogin = () => {
-    window.location.href = 'http://localhost:5000/api/auth/google';
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+    window.location.href = `${baseUrl}/auth/google`;
   };
 
   return (

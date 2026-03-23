@@ -184,7 +184,7 @@ const Whiteboard: React.FC = () => {
       // Don't intercept if user is typing in an HTML input
       const activeElement = document.activeElement;
       const isInput = activeElement?.tagName === 'INPUT' || activeElement?.tagName === 'TEXTAREA';
-      
+
       const canvas = fabricCanvasRef.current;
       const activeObj = canvas?.getActiveObject();
       const isEditingText = activeObj && activeObj.type === 'i-text' && (activeObj as fabric.IText).isEditing;

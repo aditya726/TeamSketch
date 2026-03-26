@@ -5,6 +5,7 @@ import { PencilLine, Sparkles, Zap, Users, User, LogOut } from "lucide-react";
 import { useAuthStore } from '../store/useAuthStore';
 import { useState, useEffect } from 'react';
 import api from '../services/api';
+import { incrementSketches } from '../services/userStats';
 
 const LandingPage = () => {
   const [stats, setStats] = useState<{ totalUsers: number, sampleUsers: any[] }>({ totalUsers: 0, sampleUsers: [] });
@@ -131,6 +132,9 @@ const LandingPage = () => {
           >
             <Link
               to="/whiteboard"
+              onClick={() => {
+                if (user?.id) incrementSketches(user.id, 1);
+              }}
               className="group relative px-10 py-5 bg-zinc-900 text-white rounded-2xl font-bold text-xl hover:bg-zinc-800 transition-all shadow-xl hover:shadow-2xl active:scale-95"
             >
               <span className="relative z-10 flex items-center gap-2">

@@ -4,9 +4,17 @@ import { User, Mail, Calendar, ArrowLeft, Users } from "lucide-react";
 import { Link, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import api from '../services/api';
+import { getUserStatsView, incrementSketches, type UserStatsView } from '../services/userStats';
 
 const UserProfile = () => {
   const [stats, setStats] = useState<{ totalUsers: number, sampleUsers: any[] }>({ totalUsers: 0, sampleUsers: [] });
+  const [activityStats, setActivityStats] = useState<UserStatsView>({
+    sketches: 0,
+    collaborations: 0,
+    whiteboardMsTotal: 0,
+    hoursTotal: 0,
+    isWhiteboardSessionActive: false,
+  });
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
 
@@ -24,6 +32,30 @@ const UserProfile = () => {
     fetchStats();
   }, []);
 
+  useEffect(() => {
+    const userId = user?.id;
+    if (!userId) return;
+
+    const refresh = () => setActivityStats(getUserStatsView(userId));
+    refresh();
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === `teamsketch:user-stats:${userId}`) refresh();
+    };
+
+    const onVisibilityChange = () => {
+      if (!document.hidden) refresh();
+    };
+
+    window.addEventListener('storage', onStorage);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [user?.id]);
+
   const handleLogout = () => {
     logout();
     navigate('/');
@@ -32,6 +64,13 @@ const UserProfile = () => {
   if (!user) {
     return null;
   }
+
+  const hoursDisplay = (() => {
+    const hours = activityStats.hoursTotal;
+    if (!Number.isFinite(hours) || hours <= 0) return '0';
+    const pretty = hours < 10 ? hours.toFixed(1) : Math.round(hours).toString();
+    return pretty.replace(/\.0$/, '');
+  })();
 
   return (
     <div className="min-h-screen bg-white text-zinc-900 font-architects relative overflow-hidden">
@@ -138,6 +177,12 @@ const UserProfile = () => {
             >
               <Link
                 to="/whiteboard"
+                onClick={() => {
+                  if (user?.id) {
+                    incrementSketches(user.id, 1);
+                    setActivityStats(getUserStatsView(user.id));
+                  }
+                }}
                 className="block w-full bg-indigo-600 text-white py-4 rounded-xl font-bold text-center hover:bg-indigo-700 transition-all shadow-lg hover:shadow-xl active:scale-95"
               >
                 Start Sketching
@@ -161,15 +206,15 @@ const UserProfile = () => {
           className="mt-8 grid grid-cols-3 gap-4"
         >
           <div className="bg-white rounded-xl border-2 border-zinc-900 p-6 text-center shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)]">
-            <p className="text-3xl font-gloria font-bold text-indigo-600">0</p>
+            <p className="text-3xl font-gloria font-bold text-indigo-600">{activityStats.sketches}</p>
             <p className="text-sm text-zinc-600 font-medium mt-1">Sketches</p>
           </div>
           <div className="bg-white rounded-xl border-2 border-zinc-900 p-6 text-center shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)]">
-            <p className="text-3xl font-gloria font-bold text-purple-600">0</p>
+            <p className="text-3xl font-gloria font-bold text-purple-600">{activityStats.collaborations}</p>
             <p className="text-sm text-zinc-600 font-medium mt-1">Collaborations</p>
           </div>
           <div className="bg-white rounded-xl border-2 border-zinc-900 p-6 text-center shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)]">
-            <p className="text-3xl font-gloria font-bold text-green-600">0</p>
+            <p className="text-3xl font-gloria font-bold text-green-600">{hoursDisplay}</p>
             <p className="text-sm text-zinc-600 font-medium mt-1">Hours</p>
           </div>
         </motion.div>

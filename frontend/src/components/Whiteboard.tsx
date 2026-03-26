@@ -6,6 +6,7 @@ import { io, Socket } from 'socket.io-client';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
 import { createRoom } from '../services/roomApi';
+import { endWhiteboardSession, incrementCollaborations, startWhiteboardSession } from '../services/userStats';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   // Toolbar Icons
@@ -67,6 +68,24 @@ const Whiteboard: React.FC = () => {
   // --- State ---
   const navigate = useNavigate();
   const { isAuthenticated, user } = useAuthStore();
+
+  // --- Track time spent on the whiteboard (per-user) ---
+  useEffect(() => {
+    const userId = user?.id;
+    if (!userId) return;
+
+    startWhiteboardSession(userId);
+    const end = () => endWhiteboardSession(userId);
+
+    window.addEventListener('beforeunload', end);
+    window.addEventListener('pagehide', end);
+
+    return () => {
+      end();
+      window.removeEventListener('beforeunload', end);
+      window.removeEventListener('pagehide', end);
+    };
+  }, [user?.id]);
 
   // Modes & Connectivity
   const [mode, setMode] = useState<WhiteboardMode>('solo');
@@ -968,6 +987,7 @@ const Whiteboard: React.FC = () => {
     try {
       const response = await createRoom();
       if (response.success) {
+        if (user?.id) incrementCollaborations(user.id, 1);
         setRoomId(response.roomId);
         if (socketRef.current) {
           const socketId = socketRef.current.id || `guest-${Math.random().toString(36).substr(2, 9)}`;
@@ -1015,6 +1035,7 @@ const Whiteboard: React.FC = () => {
       const response = await joinRoom(roomId);
 
       if (response.success) {
+        if (user?.id && roomId !== currentRoomId) incrementCollaborations(user.id, 1);
         // Leave current room if already in one
         if (currentRoomId) {
           socketRef.current.emit(ClientEvents.LEAVE_ROOM, { roomId: currentRoomId });

@@ -14,13 +14,19 @@ const RoomChat: React.FC<RoomChatProps> = ({ socket, roomId, user }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [inputValue, setInputValue] = useState('');
-    const messagesEndRef = useRef<HTMLDivElement>(null);
+    const messagesContainerRef = useRef<HTMLDivElement>(null);
 
     // Scroll to bottom when messages change
     useEffect(() => {
-        if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-        }
+        if (!isOpen) return;
+        const el = messagesContainerRef.current;
+        if (!el) return;
+
+        // Use container scrolling (never page scrolling) to avoid viewport "bounce"
+        // when the panel mounts/updates.
+        requestAnimationFrame(() => {
+            el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+        });
     }, [messages, isOpen]);
 
     useEffect(() => {
@@ -82,7 +88,7 @@ const RoomChat: React.FC<RoomChatProps> = ({ socket, roomId, user }) => {
                     animate={{ scale: 1, opacity: 1 }}
                     exit={{ scale: 0, opacity: 0 }}
                     onClick={() => setIsOpen(true)}
-                    className="absolute bottom-4 right-4 bg-indigo-600 hover:bg-indigo-700 text-white p-4 rounded-full shadow-lg z-50 flex items-center justify-center transition-colors"
+                    className="fixed bottom-4 right-4 bg-indigo-600 hover:bg-indigo-700 text-white p-4 rounded-full shadow-lg z-50 flex items-center justify-center transition-colors"
                 >
                     <MessageSquare size={24} />
                     {/* Optional unread badge could go here */}
@@ -97,7 +103,7 @@ const RoomChat: React.FC<RoomChatProps> = ({ socket, roomId, user }) => {
                         animate={{ y: 0, opacity: 1, scale: 1 }}
                         exit={{ y: 50, opacity: 0, scale: 0.95 }}
                         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                        className="absolute bottom-4 right-4 w-80 h-96 bg-white rounded-2xl shadow-2xl border border-zinc-200 flex flex-col overflow-hidden z-50 font-sans"
+                        className="fixed bottom-4 right-4 w-80 h-96 bg-white rounded-2xl shadow-2xl border border-zinc-200 flex flex-col overflow-hidden z-50 font-sans"
                     >
                         {/* Header */}
                         <div className="bg-indigo-600 text-white p-4 flex justify-between items-center shadow-md z-10">
@@ -114,7 +120,7 @@ const RoomChat: React.FC<RoomChatProps> = ({ socket, roomId, user }) => {
                         </div>
 
                         {/* Messages Area */}
-                        <div className="flex-1 overflow-y-auto p-4 bg-stone-50 flex flex-col gap-3">
+                        <div ref={messagesContainerRef} className="flex-1 overflow-y-auto overscroll-contain p-4 bg-stone-50 flex flex-col gap-3">
                             {messages.length === 0 ? (
                                 <div className="flex-1 flex flex-col items-center justify-center text-zinc-400">
                                     <MessageSquare size={32} className="mb-2 opacity-50" />
@@ -159,7 +165,6 @@ const RoomChat: React.FC<RoomChatProps> = ({ socket, roomId, user }) => {
                                     );
                                 })
                             )}
-                            <div ref={messagesEndRef} />
                         </div>
 
                         {/* Input Area */}

@@ -399,6 +399,8 @@ const Whiteboard: React.FC = () => {
     canvas.selection = false;
     canvas.defaultCursor = 'default';
     canvas.hoverCursor = 'move';
+    // Ensure drawing cursor is always our custom black crosshair
+    canvas.freeDrawingCursor = BLACK_CROSSHAIR;
     canvas.discardActiveObject();
     canvas.requestRenderAll();
 

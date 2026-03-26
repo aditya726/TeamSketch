@@ -1,4 +1,4 @@
-name: Deploy to EC2
+name: Full CI/CD Deploy
 
 on:
   push:
@@ -10,7 +10,57 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy via SSH
+      # -------------------------
+      # 1. Checkout code
+      # -------------------------
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      # -------------------------
+      # 2. Setup Node
+      # -------------------------
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      # -------------------------
+      # 3. Build Frontend
+      # -------------------------
+      - name: Build Frontend
+        run: |
+          cd frontend
+          npm install
+          npm run build
+
+      # -------------------------
+      # 4. Deploy to S3
+      # -------------------------
+      - name: Upload to S3
+        run: |
+          aws s3 sync frontend/dist s3://${{ secrets.S3_BUCKET_NAME }} --delete
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+
+      # -------------------------
+      # 5. Invalidate CloudFront
+      # -------------------------
+      - name: Invalidate CloudFront
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
+            --paths "/*"
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+
+      # -------------------------
+      # 6. Deploy Backend (EC2)
+      # -------------------------
+      - name: Deploy Backend via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -19,24 +69,15 @@ jobs:
           script: |
             set -e
 
-            echo "🚀 Deploying..."
-
             cd ~/TeamSketch
-
             git pull origin main
 
             cd backend
             npm install
 
-            # Restart both instances
-            # Start backend API
             pm2 restart app || pm2 start src/app.js --name app -- 5000
-
-            # Start whiteboard socket server
             pm2 restart whiteboardServer || pm2 start src/whiteboardServer.js --name whiteboardServer -- 4000
 
             pm2 save
 
             sudo nginx -t && sudo systemctl reload nginx
-
-            echo "✅ Done!"

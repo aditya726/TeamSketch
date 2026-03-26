@@ -1,0 +1,39 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_PRIVATE_KEY }}
+          script: |
+            set -e
+
+            echo "🚀 Deploying..."
+
+            cd ~/TeamSketch
+
+            git pull origin main
+
+            cd backend
+            npm install
+
+            # Restart both instances
+            pm2 restart backend-5000 || pm2 start src/app.js --name backend-5000 -- 5000
+            pm2 restart backend-4000 || pm2 start src/whiteboardServer.js --name backend-4000 -- 4000
+
+            pm2 save
+
+            sudo nginx -t && sudo systemctl reload nginx
+
+            echo "✅ Done!"

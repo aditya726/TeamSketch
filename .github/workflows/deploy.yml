@@ -29,8 +29,11 @@ jobs:
             npm install
 
             # Restart both instances
-            pm2 restart backend-5000 || pm2 start src/app.js --name backend-5000 -- 5000
-            pm2 restart backend-4000 || pm2 start src/whiteboardServer.js --name backend-4000 -- 4000
+            # Start backend API
+            pm2 restart app || pm2 start src/app.js --name app -- 5000
+
+            # Start whiteboard socket server
+            pm2 restart whiteboardServer || pm2 start src/whiteboardServer.js --name whiteboardServer -- 4000
 
             pm2 save
 

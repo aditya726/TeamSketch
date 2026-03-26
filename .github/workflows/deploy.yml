@@ -25,12 +25,16 @@ jobs:
           node-version: 18
 
       # -------------------------
-      # 3. Build Frontend
+      # 3. Build Frontend (UPDATED ✅)
       # -------------------------
       - name: Build Frontend
         run: |
           cd frontend
           npm install
+
+          echo "VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }}" > .env
+          echo "VITE_SOCKET_URL=${{ secrets.VITE_SOCKET_URL }}" >> .env
+
           npm run build
 
       # -------------------------

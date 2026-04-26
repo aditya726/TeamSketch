@@ -43,6 +43,67 @@ const BLACK_CROSSHAIR = `url('data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
+// --- Custom Fabric Arrow Class ---
+const Arrow = fabric.util.createClass(fabric.Line, {
+  type: 'arrow',
+
+  initialize: function(points: any, options: any) {
+    this.callSuper('initialize', points, options);
+  },
+
+  _render: function(ctx: CanvasRenderingContext2D) {
+    this.callSuper('_render', ctx);
+
+    if (this.width === 0 && this.height === 0) return;
+
+    ctx.save();
+    
+    // Scale values
+    const sX = this.scaleX || 1;
+    const sY = this.scaleY || 1;
+    
+    // The relative points in the unscaled object coordinate system
+    const p = this.calcLinePoints();
+    
+    // Undo the scale from the context to prevent arrowhead distortion
+    ctx.scale(1 / sX, 1 / sY);
+    
+    // Calculate visual endpoints in the scaled space
+    const vx1 = p.x1 * sX;
+    const vy1 = p.y1 * sY;
+    const vx2 = p.x2 * sX;
+    const vy2 = p.y2 * sY;
+    
+    // The true visual angle of the scaled line
+    const angle = Math.atan2(vy2 - vy1, vx2 - vx1);
+    
+    // Translate to the visual tip
+    ctx.translate(vx2, vy2);
+    
+    // Rotate to align with the visual line
+    ctx.rotate(angle);
+    
+    // Draw the arrowhead (scale uniform with the max scaling applied)
+    ctx.beginPath();
+    const maxScale = Math.max(Math.abs(sX), Math.abs(sY));
+    const headlen = Math.max(15, this.strokeWidth * 3) * maxScale; 
+    ctx.moveTo(0, 0);
+    ctx.lineTo(-headlen, headlen / 2);
+    ctx.lineTo(-headlen, -headlen / 2);
+    ctx.closePath();
+    
+    ctx.fillStyle = this.stroke;
+    ctx.fill();
+    ctx.restore();
+  }
+});
+
+(fabric as any).Arrow = Arrow;
+(fabric as any).Arrow.fromObject = function(object: any, callback: any) {
+  callback && callback(new (fabric as any).Arrow([object.x1, object.y1, object.x2, object.y2], object));
+};
+// ---------------------------------
+
 const Whiteboard: React.FC = () => {
   // --- Refs ---
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -849,11 +910,11 @@ const Whiteboard: React.FC = () => {
       });
     } else if (tool === 'line') {
       newObj = new fabric.Line([pointer.x, pointer.y, pointer.x, pointer.y], {
-        stroke: color, strokeWidth: strokeWidth,
-      });
+        stroke: color, strokeWidth: strokeWidth, id: generateId()
+      } as any);
     } else if (tool === 'arrow') {
-      newObj = new fabric.Line([pointer.x, pointer.y, pointer.x, pointer.y], {
-        stroke: color, strokeWidth: strokeWidth
+      newObj = new (fabric as any).Arrow([pointer.x, pointer.y, pointer.x, pointer.y], {
+        stroke: color, strokeWidth: strokeWidth, id: generateId()
       });
     } else if (tool === 'text') {
       const text = new fabric.IText('Type here', {
